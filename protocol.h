@@ -57,8 +57,8 @@ struct PacketHeader
 
 uint16_t prepare_packet(uint8_t code,void *packet,size_t packet_len);
 
-template<typename T>
 #pragma pack(push,1)
+template<typename T>
 struct Packet
 {
 	Packet(uint8_t code,T *data=0) {
