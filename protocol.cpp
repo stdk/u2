@@ -1,13 +1,17 @@
 #include "protocol.h"
+#include "api_internal.h"
 #include "crc16.h"
 
 #include <boost/scoped_array.hpp>
 
+#ifdef WIN32
 #include <windows.h>
-#include <time.h>
+#endif
 
+#include <time.h>
 #include <iostream>
 #include <string>
+#include <cstring>
 
 void debug_data(const char* header,void* data,size_t len)
 {
@@ -138,7 +142,7 @@ size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len)
 }
 
 
-extern "C" __declspec(dllexport) long bytestaffing_test(uint8_t *data,size_t len)
+EXPORT long bytestaffing_test(uint8_t *data,size_t len)
 {
 	//debug_data("data",data,len);
 
@@ -147,12 +151,12 @@ extern "C" __declspec(dllexport) long bytestaffing_test(uint8_t *data,size_t len
 	//debug_data("bs",bs.get(),bs_len);	
 
 	scoped_array<uint8_t> un_bs(new uint8_t[len]);
-	size_t un_bs_len = unbytestaff(un_bs.get(),len,bs.get(),bs_len);
+	unbytestaff(un_bs.get(),len,bs.get(),bs_len);
 	//debug_data("un_bs",un_bs.get(),un_bs_len);
 
 	return memcmp(un_bs.get(),data,len);
 }
-
+#ifdef WIN32
 void HandleLastError(const char *msg) {
 	DWORD lastError = GetLastError();
 	char *err;
@@ -221,6 +225,7 @@ HANDLE ComOpen(const char* path, uint32_t baud)
 
 	return hCom;
 }
+#endif
 
 IReaderImpl::~IReaderImpl()
 {
@@ -228,8 +233,10 @@ IReaderImpl::~IReaderImpl()
 }
 
 
+#ifdef WIN32
 IReaderImpl* create_blockwise_impl(const char* path,uint32_t baud);
 IReaderImpl* create_bytewise_impl(const char* path,uint32_t baud);
+#endif
 IReaderImpl* create_asio_impl(const char* path,uint32_t baud);
 
 Reader::Reader(const char* path,uint32_t baud,const char* impl_tag):impl(0)
