@@ -2,7 +2,7 @@
 /* Файл содержит описание функций подсчета контрольных сумм по алгоритму CRC16 */
 
 #include <string.h>
-#include "CRC16.h"
+#include "crc16.h"
 
 #define CRC_A 1
 #define CRC_B 2

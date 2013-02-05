@@ -4,7 +4,7 @@
 #ifdef WIN32
 #define EXPORT extern "C" __declspec(dllexport)
 #else
-#define EXPORT extern "C"
+#define EXPORT extern "C" __attribute__((__visibility__("default")))
 #endif
 
 #define CHECK(statement) do { long ret=(statement); if(ret) return ret; } while(0);
