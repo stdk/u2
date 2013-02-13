@@ -19,8 +19,6 @@ struct DEVICE_EVENT {
 };
 #pragma pack(pop)
 
-char t[144-sizeof(DEVICE_EVENT)];
-
 API_FUNCTION_1_TO_0(SET_MODE,proxy_set_mode,uint32_t);
 API_FUNCTION_1_TO_0(SET_TIME,proxy_set_time,uint32_t);
 API_FUNCTION_0_TO_1(GET_TIME,proxy_get_time,uint32_t);
