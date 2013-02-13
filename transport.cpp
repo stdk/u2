@@ -12,9 +12,8 @@ struct DEVICE_EVENT {
  uint32_t EventNumber;
  uint32_t DateTime;
  uint32_t DeviceID;
- uint8_t DeviceType;
- uint8_t EventCode;
- uint8_t ErrorCode;
+ uint16_t EventCode;
+ uint8_t DeviceType; 
  uint8_t DataLen;
  uint8_t EventData[128]; 
 };
