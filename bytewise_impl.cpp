@@ -6,7 +6,7 @@
 void HandleLastError(const char *msg);
 size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len);
 size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len);
-HANDLE ComOpen(const char* path, uint32_t baud);
+HANDLE ComOpen(const char* path, uint32_t baud,uint32_t flags);
 
 class BytewiseImpl : public IReaderImpl
 {
@@ -14,7 +14,7 @@ class BytewiseImpl : public IReaderImpl
 public:
 	BytewiseImpl(const char* path,uint32_t baud) {
 		fprintf(stderr,"BytewiseImpl\n");
-		hCom = ComOpen(path,baud);
+		hCom = ComOpen(path,baud,0);
 	}
 
 	virtual ~BytewiseImpl() {
@@ -81,16 +81,11 @@ public:
 					read_buf[bytes_read++] = input;
 
 					if(bytes_read >= sizeof(PacketHeader) && bytes_read >= header->full_size()) {
-						if( !header->crc_check() ) return IO_ERROR;
-
 						/*__int64 b;
 						QueryPerformanceCounter((LARGE_INTEGER*)&b);
 						long elapsed = (long)(((double)(b - a) / frequency) * 1000000);
 						fprintf(stderr,"perfc: %i\n",elapsed);*/
-
-						if(header->code == NACK_BYTE) {
-							return header->nack_data();
-						}
+						
 						return 0;
 					}
 				}

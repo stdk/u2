@@ -1,20 +1,12 @@
 #include "api_internal.h"
 
 #include "protocol.h"
-#include <boost/system/system_error.hpp>
+#include "commands.h"
+#include "crc16.h"
 
 #include <iostream>
 #include <cstdio>
-
-#include "crc16.h"
-
-#define GET_SN               0x10
-#define GET_VERSION          0x02 
-#define FIELD_ON             0x4E
-#define FIELD_OFF            0x4F
-#define MULTIBYTE_PACKAGE	 0x04
-#define SYNC_WITH_DEVICE	 0x05
-#define UPDATE_START         0x06
+#include <boost/system/system_error.hpp>
 
 #define PACKET_BUFFER        256
 #define MAX_FRAME_SIZE		 128

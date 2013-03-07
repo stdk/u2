@@ -8,89 +8,147 @@
 void HandleLastError(const char *msg);
 size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len);
 size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len);
-HANDLE ComOpen(const char* path, uint32_t baud);
+HANDLE ComOpen(const char* path, uint32_t baud,uint32_t flags);
+void HandleLastError(const char *msg);
+
+#define IO_BUFFER_LEN   512
+#define IO_TIMEOUT      500
+#define FULL_TIMEOUT    2000
+
+#define USE_IOCP
 
 class BlockwiseImpl : public IReaderImpl
 {
 	HANDLE hCom;
+#ifdef USE_IOCP
+	HANDLE hIOCP;
+	OVERLAPPED hOver;
+#endif
 public:
 	BlockwiseImpl(const char* path,uint32_t baud) {
 		fprintf(stderr,"BlockwiseImpl\n");
-		hCom = ComOpen(path,baud);
+#ifdef USE_IOCP
+		uint32_t flags = FILE_FLAG_OVERLAPPED;
+#else
+		uint32_t flags = 0;
+#endif
+
+		hCom = ComOpen(path, baud, flags);
 		if(INVALID_HANDLE_VALUE == hCom) throw -1;
+		
+#ifdef USE_IOCP
+		hIOCP = CreateIoCompletionPort(hCom,0,0,0);
+		if(!hIOCP) {
+			HandleLastError("CreateIoCompletionPort");
+			throw -2;
+		};
+	
+		memset(&hOver,0,sizeof(hOver));
+#endif
 	}
 
 	virtual ~BlockwiseImpl() {
-		if (hCom != NULL) CloseHandle(hCom);
-		hCom = NULL;		
+#ifdef USE_IOCP
+		if(hIOCP) {
+			CloseHandle(hIOCP);
+			hIOCP = 0;
+		}
+#endif
+		if (hCom) {
+			CloseHandle(hCom);
+			hCom = NULL;		
+		}		
+	}
+
+	BOOL write(void *buf,size_t len,DWORD *bytes_written)
+	{
+#ifdef USE_IOCP
+		OVERLAPPED *over = &hOver;
+#else
+		OVERLAPPED *over = 0;
+#endif
+
+		BOOL write_ret = WriteFile(hCom, buf, len, bytes_written, over);
+		if(!write_ret && GetLastError() != ERROR_IO_PENDING) {
+			HandleLastError("WriteFile");
+			return FALSE;
+		}
+#ifdef USE_IOCP	
+		OVERLAPPED *iocpOver;
+		ULONG iocpKey;
+
+		BOOL completed = GetQueuedCompletionStatus(hIOCP,bytes_written,&iocpKey,&iocpOver,IO_TIMEOUT);
+		if(!completed) {
+			HandleLastError("WriteFile:GetQueuedCompletionStatus");
+			return FALSE;
+		}
+#endif
+		return TRUE;
+	}
+
+	BOOL read(void *buf,size_t len,DWORD *bytes_read)
+	{
+#ifdef USE_IOCP
+		OVERLAPPED *over = &hOver;
+#else
+		OVERLAPPED *over = 0;
+#endif
+
+		BOOL read_ret = ReadFile(hCom, buf, len, bytes_read, over);
+		if(!read_ret && GetLastError() != ERROR_IO_PENDING) {
+			HandleLastError("ReadFile");
+			return FALSE;
+		}
+
+#ifdef USE_IOCP	
+		OVERLAPPED *iocpOver;
+		ULONG iocpKey;
+
+		BOOL completed = GetQueuedCompletionStatus(hIOCP,bytes_read,&iocpKey,&iocpOver,IO_TIMEOUT);
+		if(!completed) {
+			HandleLastError("ReadFile:GetQueuedCompletionStatus");
+			return FALSE;
+		}
+#endif
+
+		return TRUE;
 	}
 
 	long transceive(void* data,size_t len,void* packet,size_t packet_len) {
-		unsigned char read_buf[512] = {0};
-		unsigned char write_buf[512] = {0};
+		unsigned char read_buf[IO_BUFFER_LEN]  = {0};
+		unsigned char write_buf[IO_BUFFER_LEN] = {0};
 
 		size_t write_buf_len = bytestaff(write_buf,sizeof(write_buf),data,len);
 
-		PurgeComm(hCom,PURGE_TXCLEAR|PURGE_RXCLEAR);
+		//PurgeComm(hCom,PURGE_TXCLEAR|PURGE_RXCLEAR);
 	
 		DWORD bytes_written = 0;
-		BOOL write_ret = WriteFile(hCom,write_buf,write_buf_len,&bytes_written,0);
-/*
-		COMMTIMEOUTS		CommTimeouts;
-		CommTimeouts.ReadIntervalTimeout			= 500;
-		CommTimeouts.ReadTotalTimeoutMultiplier		= 500;
-		CommTimeouts.ReadTotalTimeoutConstant		= 500;
-		CommTimeouts.WriteTotalTimeoutMultiplier	= 500;
-		CommTimeouts.WriteTotalTimeoutConstant		= 500;
-		SetCommTimeouts(hCom, &CommTimeouts);
-*/
-		time_t timeLimit, currentTime;
-		time(&timeLimit);
-		timeLimit += 2;
-		
-		while(true) {
-			//fprintf(stderr,"X");
-			time(&currentTime);
-			if (currentTime>=timeLimit)	return IO_ERROR;
+		if(!write(write_buf,write_buf_len,&bytes_written)) return IO_ERROR;
 
-			DWORD bytes_read;
-			ReadFile(hCom,read_buf, 1, &bytes_read, NULL);
+		DWORD time_limit = GetTickCount() + FULL_TIMEOUT;
 
-			if(bytes_read == 1 && *read_buf == FBGN) break;
+		DWORD bytes_read = 0;
+		while(GetTickCount() < time_limit && !bytes_read && *read_buf != FBGN) {
+			if(!read(read_buf,1,&bytes_read)) return IO_ERROR;
 		}
-
-		DWORD bytes_read = 1;
+		
 		DWORD errors = 0;
 		COMSTAT comstat = {0};
-		PacketHeader* header = (PacketHeader*)packet;			
 
-		while(true) {		
-			//fprintf(stderr,"Y");
-			time(&currentTime); //does not decrease perfomance
-			if (currentTime>=timeLimit)	return IO_ERROR;
-
+		while(GetTickCount() < time_limit) {		
 			ClearCommError(hCom,&errors,&comstat);
-			if(!comstat.cbInQue) {
-				//Sleep(0); //leads to slight perfomance decrease
-				continue;
-			}
+			if(!comstat.cbInQue) continue;
 
 			DWORD bytes_read_current = 0;
-			ReadFile(hCom,read_buf + bytes_read,comstat.cbInQue,&bytes_read_current,NULL);
+			if(!read(read_buf+bytes_read,comstat.cbInQue,&bytes_read_current)) return IO_ERROR;
 			bytes_read += bytes_read_current;
 
 			size_t buf_len = unbytestaff(packet,packet_len,read_buf,bytes_read);
 					
-			if(buf_len >= header->full_size()) break;
+			if(buf_len >= ((PacketHeader*)packet)->full_size()) return 0;
 		}
 		
-		//checking packet validity
-		if(!header->crc_check()) return PACKET_CRC_ERROR;
-		if(header->code == NACK_BYTE) {
-			return header->nack_data();
-		}
-
-		return 0;
+		return TIMEOUT_ERROR;
 	}
 };
 
@@ -98,76 +156,3 @@ IReaderImpl* create_blockwise_impl(const char* path,uint32_t baud)
 {
 	return new BlockwiseImpl(path,baud);
 }
-
-/*long transceive_aio(void* data,size_t len,void* packet,size_t packet_len) {
-		unsigned char read_buf[512] = {0};
-		unsigned char write_buf[512] = {0};
-		size_t write_buf_len = bytestaff(write_buf,sizeof(write_buf),data,len);
-
-		PurgeComm(hCom,PURGE_TXCLEAR|PURGE_RXCLEAR);
-
-		OVERLAPPED writeAIO = {0};
-
-		DWORD bytes_written = 0;
-		BOOL write_ret = WriteFile(hCom,write_buf,write_buf_len,0,&writeAIO);
-		if(!write_ret && GetLastError() != ERROR_IO_PENDING) {
-			HandleLastError("WriteFile");
-			return IO_ERROR;
-		} else if(!write_ret && GetLastError() == ERROR_IO_PENDING) {
-			while(!GetOverlappedResult(hCom,&writeAIO,&bytes_written,TRUE)) {
-			    DWORD err = GetLastError();
-				if(err == ERROR_IO_INCOMPLETE) {
-					fprintf(stderr,"Write pending\n",GetLastError());
-				} else {
-					HandleLastError("GetOverlappedResult");
-					return IO_ERROR;
-				}				
-			}
-			if(bytes_written != write_buf_len) {
-				fprintf(stderr,"bytes_written != write_buf_len\n");
-				return IO_ERROR;
-			}
-		}
-
-		OVERLAPPED readAIO = {0};
-		DWORD bytes_read = 0;
-
-		BOOL read_ret = ReadFile(hCom,read_buf,sizeof(read_buf), NULL,&readAIO);
-		if (!read_ret && GetLastError() != ERROR_IO_PENDING ) {
-            HandleLastError("ReadFile");
-            return IO_ERROR;
-        } else if(!read_ret && GetLastError() == ERROR_IO_PENDING) {
-			while( !GetOverlappedResult( hCom,&readAIO,&bytes_read,TRUE)) {
-				if (GetLastError() == ERROR_IO_INCOMPLETE) {
-					fprintf(stderr,"Read pending\n",GetLastError());
-				} else {
-					HandleLastError("GetOverlappedResult");
-                    break;
-				}
-			}
-			fprintf(stderr,"bytes_read: %i\n",bytes_read);
-		}
-
-		uint8_t* packet_begin = find_packet_begin(read_buf,bytes_read);
-		if(!packet) return IO_ERROR;
-	
-		size_t current_length = bytes_read - (packet_begin - read_buf);
-		//debug_data("Selected",packet_begin,current_length);
-
-		if(current_length <= sizeof(PacketHeader)) return IO_ERROR;
-
-		size_t buf_len = unbytestaff(packet,packet_len,packet_begin,current_length);
-		//debug_data("Unbytestaffed",packet,buf_len);
-
-		PacketHeader* header = (PacketHeader*)packet;
-		if(buf_len < header->full_size()) return IO_ERROR;
-
-		//checking packet validity
-		if(!header->crc_check()) return PACKET_CRC_ERROR;
-		if(header->code == NACK_BYTE) {
-			//cerr << "header->code ==  NACK_BYTE" << endl;
-			return header->nack_data();
-		}
-
-		return 0;
-	}*/

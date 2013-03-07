@@ -1,24 +1,13 @@
 #include "api_internal.h"
 #include "api_common.h"
 #include "protocol.h"
+#include "commands.h"
 
 #include <iostream>
 #include <cstring>
 
 using namespace std;
 using namespace boost;
-
-#define ANTICOLLISION    0x22
-#define REQUEST_STD      0x40
-#define SELECT           0x43
-#define AUTH             0x44
-#define AUTH_DYN         0xBB
-#define BLOCK_READ       0xBC
-#define BLOCK_WRITE      0xBD
-#define SECTOR_READ      0xBE
-#define SECTOR_WRITE     0xBF
-#define SET_TRAILER      0xC0
-#define SET_TRAILER_DYN  0xC1
 
 struct SerialNumber
 {
@@ -95,42 +84,15 @@ struct Card
  sector data: either by blocks or as a whole sector.
  sizeof(Sector) == 51
 */
-struct Sector
+struct Sector : public SectorBase
 {
-	struct block_t {
-		uint8_t data[BLOCK_LENGTH];
-	};
-
-	struct sector_t {
-		block_t blocks[3];
-	};
-
-	uint8_t num;  // sector number
-	uint8_t key;  // index of key for this sector in reader internal memory
-	uint8_t mode; // 0 for static authentication, 1 for dynamic authentication	
-	sector_t data;
-
-	/* ------------------------- */
-
-	struct static_auth_request {
-		uint8_t key;
-		uint8_t sector;
-		SN5 sn;
-	};
-
 	inline long authenticate(Reader *reader,Card *card) {
 		const int code = this->mode ? AUTH_DYN : AUTH;
-		static_auth_request request = { this->key, this->num, *card->sn.sn5() };
+		auth_request request = { this->key, this->num, *card->sn.sn5() };
 		return reader->send_command(code,&request,(uint8_t*)0);
 	}
 
-	/* ------------------------- */	
-
-	struct read_block_request {
-		uint8_t block;
-		uint8_t sector;
-		uint8_t enc;
-	}; //3
+	/* ------------------------- */
 
 	inline long read_block(Reader *reader, uint8_t block, uint8_t enc) {
 		if(block >= sizeof(this->data.blocks)/sizeof(block_t)) return -1;
@@ -138,15 +100,6 @@ struct Sector
 		read_block_request request = { block, this->num, enc };
 		return reader->send_command(BLOCK_READ,&request, &this->data.blocks[block]);
 	}
-
-	/* ------------------------- */
-
-	struct write_block_request {
-		block_t data;
-		uint8_t block;
-		uint8_t sector;
-		uint8_t enc;
-	}; //19
 
 	inline long write_block(Reader *reader, uint8_t block, uint8_t enc) {
 		if(block >= sizeof(this->data.blocks)/sizeof(block_t)) return -1;
@@ -157,39 +110,17 @@ struct Sector
 
 	/* ------------------------- */
 
-	struct read_sector_request {
-		uint8_t sector;
-		uint8_t enc;
-	}; //2
-
 	inline long read(Reader* reader, uint8_t enc) {
 		read_sector_request request = { this->num, enc };
 		return reader->send_command(SECTOR_READ,&request,&this->data);
 	}
-
-    /* ------------------------- */
-
-	struct write_sector_request {
-		sector_t data;
-		uint8_t sector;
-		uint8_t enc;
-	}; // 50
 
 	inline long write(Reader* reader, uint8_t enc) {
 		write_sector_request request = { this->data, this->num, enc };
 		return reader->send_command(SECTOR_WRITE,&request,(uint8_t*)0);
 	}
 
-	struct set_trailer_request {
-		uint8_t sector;
-		uint8_t key;
-	}; //2
-
-	struct set_trailer_dynamic_request {
-		uint8_t sector;
-		uint8_t key;
-		SN5 sn;
-	}; //7
+	/* ------------------------- */
 
 	inline long set_trailer(Reader* reader) {
 		set_trailer_request request = { this->num, this->key };

@@ -43,11 +43,15 @@ uint32_t PacketHeader::nack_data()
 	return result;
 }
 
+inline uint8_t* PacketHeader::data() 
+{
+	return (uint8_t*)this + sizeof(*this);
+}
+
 size_t PacketHeader::get_data(void* buf,size_t len)
 {
-	size_t copy_len = this->len < len ? this->len : len;
-	uint8_t *p = (uint8_t*)this +sizeof(*this);
-	std::copy(p,p + copy_len,(uint8_t*)buf);
+	size_t copy_len = min(this->len,len);
+	memcpy(buf,data(),copy_len);
 	return copy_len;
 }
 
@@ -69,7 +73,7 @@ uint16_t prepare_packet(uint8_t code,void* packet,size_t packet_len)
 
 long create_custom_packet(void* packet,size_t *packet_len,uint8_t code,void *data,uint8_t len)
 {
-	if(len < sizeof(PacketHeader)) return -1;
+	if(*packet_len < sizeof(PacketHeader)) return -1;
 
 	size_t max_packet_len = *packet_len; //save initial value for comparison
 	PacketHeader* header = (PacketHeader*)packet;
@@ -91,23 +95,23 @@ long create_custom_packet(void* packet,size_t *packet_len,uint8_t code,void *dat
 
 size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len)
 {
-	if(!dst_len) return 0;
+	if(!dst_len || !src_len) return 0;
 
 	uint8_t *src = (uint8_t*)src_buf;
 	uint8_t *src_end = src + src_len;
 	uint8_t *dst = (uint8_t*)dst_buf;
 	uint8_t *dst_end = dst + dst_len;
 
+	while(src != src_end && *src != FBGN && src++);
+
+	//debug_data("src_buf",src,src_end-src);
+
 	bool escape = false;
 	while( src != src_end && dst != dst_end ) {
 		uint8_t c = *src++;
 		if(escape) {
-			if(c == TFBGN) *dst++ = FBGN;
-			else if(c == TFESC) *dst++ = FESC;
-			else {
-				*dst++ = FESC;
-				if(dst != dst_end) *dst++ = c;
-			}
+			*dst++ = c == TFBGN ? FBGN : FESC;
+			if(c != TFBGN && c != TFESC && dst != dst_end) *dst++ = c; 
 			escape = false;
 		} else {
 			if(c == FESC) escape = true;
@@ -179,7 +183,7 @@ void HandleLastError(const char *msg) {
     LocalFree(err);
 }
 
-HANDLE ComOpen(const char* path, uint32_t baud)
+HANDLE ComOpen(const char* path, uint32_t baud,uint32_t flags)
 {
 	COMMTIMEOUTS		CommTimeouts;
 	DCB					dcb;
@@ -193,7 +197,7 @@ HANDLE ComOpen(const char* path, uint32_t baud)
 				     0,								// comm devices must be opened with exclusive access
 				     NULL,							// no security attributes
 				     OPEN_EXISTING,					// comm devices must use OPEN_EXISTING
-				     /*FILE_FLAG_OVERLAPPED*/0,    	// Async I/O
+				     flags,    	                    // flags
 				     0);							// template must be 0 for comm devices
 
 	
@@ -238,6 +242,7 @@ IReaderImpl* create_blockwise_impl(const char* path,uint32_t baud);
 IReaderImpl* create_bytewise_impl(const char* path,uint32_t baud);
 #endif
 IReaderImpl* create_asio_impl(const char* path,uint32_t baud);
+IReaderImpl* create_file_impl(const char* path,uint32_t baud);
 
 Reader::Reader(const char* path,uint32_t baud,const char* impl_tag):impl(0)
 {
@@ -247,7 +252,7 @@ Reader::Reader(const char* path,uint32_t baud,const char* impl_tag):impl(0)
 	if(s == "blockwise") impl = create_blockwise_impl(path,baud);
 #endif
 	if(s == "asio") impl = create_asio_impl(path,baud);
-	
+	if(s == "file") impl = create_file_impl(path,baud);	
 }
 
 Reader::~Reader()
@@ -264,11 +269,15 @@ long Reader::send_command(void* packet,size_t packet_len,void* answer,size_t ans
 	if(ret) return ret;
 
 	PacketHeader *header = (PacketHeader*)packet_buf;
+
+    if(!header->crc_check()) return PACKET_CRC_ERROR;
+	if(header->code == NACK_BYTE) return header->nack_data();
+
 	if(answer) header->get_data(answer,answer_len);
-	if(header->len == answer_len) {
-		return 0;
-	} else {
+	if(header-> len != answer_len) {
 		uint16_t payload = (header->len << 8) + answer_len;
 		return PACKET_DATA_LEN_ERROR | (payload << 8);
 	}
+
+	return 0;	
 }

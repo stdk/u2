@@ -7,13 +7,12 @@ using namespace boost;
 #define ERR_MASK                0xFF0000FF
 
 #define IO_ERROR                0x0E000001
+#define TIMEOUT_ERROR           0x0E000002
 #define NO_IMPL                 0x0E0000F0
 #define NO_ANSWER               0x0E0000A0
 #define WRONG_ANSWER            0x0E0000DF
 #define PACKET_CRC_ERROR        0x0E0000CC
 #define PACKET_DATA_LEN_ERROR   0x0E0000DE
-
-#define PACKET_RECEIVE_TIMEOUT 3000
 
 #define FBGN        0xFF
 #define FESC        0xF1
@@ -42,11 +41,16 @@ struct PacketHeader
 	//If code == NACK_BYTE, it means error happened
 	//and information about that error came in packet data.	
 	//No more that 4 bytes of nack data can be retrieved this way.
-	uint32_t nack_data();
+	inline uint32_t nack_data();
 
 	//Warning: this function assumes, that `this` points 
 	//to buffer of at least this->full_size() length.
+	//Copies data contents of this packet to given buffer.
 	size_t get_data(void* buf,size_t len);
+
+	//Returns pointer to data section of this packet or 0
+	//if there is no data in packet.
+	inline uint8_t* data();
 
 	uint8_t head;
 	uint8_t addr;
@@ -92,6 +96,7 @@ class IReaderImpl
 {
 public:
 	virtual ~IReaderImpl();
+	//virtual long ctl(uint32_t options,void* arg,size_t len);
 	virtual long transceive(void* data,size_t len,void* packet,size_t packet_len) = 0;
 };
 

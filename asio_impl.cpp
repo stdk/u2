@@ -15,6 +15,8 @@
 using namespace std;
 using namespace boost;
 
+#define PACKET_RECEIVE_TIMEOUT 3000
+
 static const int log_level = 0;
 
 //define required functions from other modules
@@ -146,15 +148,9 @@ long AsioImpl::transceive(void* data,size_t len,void* packet,size_t packet_len)
 		return IO_ERROR;
 	}
 
-		//checking packet validity
-		if(!data_available) return NO_ANSWER;
-		if(!header->crc_check()) return PACKET_CRC_ERROR;
-		if(header->code == NACK_BYTE) {
-			if(log_level) cerr << "header->code ==  NACK_BYTE" << endl;
-			return header->nack_data();
-		}
-
-		return 0;
+	if(!data_available) return NO_ANSWER;
+		
+	return 0;
 }
 
 IReaderImpl* create_asio_impl(const char* path,uint32_t baud)
