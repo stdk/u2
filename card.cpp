@@ -33,7 +33,11 @@ struct SerialNumber
 		copy(buf,buf + len,&sn[shift]);
 
 		sn[sizeof(sn)-1] = buf[0] ^ buf[1] ^ buf[2] ^ buf[3];		
-	}	
+	}
+
+	bool operator==(const SerialNumber &other) {
+		return memcmp(sn,other.sn,sizeof(this->sn)) == 0;
+	}
 
 	//uint64_t getSN64() { return *(uint64_t*)sn; }
 	inline SN5* sn5() {
@@ -55,17 +59,24 @@ struct Card
 	}
 
 	inline long reset(Reader *reader) {
-		return request_std(reader);
+		uint16_t type;
+		CHECK(request_std(reader,&type));
+		if(this->type != type) return WRONG_CARD;
+		SerialNumber sn;
+		CHECK(anticollision(reader,&sn));
+		return this->sn == sn ? 0 : WRONG_CARD;
 	}
 
-	inline long request_std(Reader *reader) {
-		return reader->send_command(REQUEST_STD,&type);
+	inline long request_std(Reader *reader,uint16_t *type = 0) {
+		type = type ? type : &this->type;
+		return reader->send_command(REQUEST_STD,type);
 	}
 
-	inline long anticollision(Reader *reader) {
-		long ret = reader->send_command(ANTICOLLISION,&sn);
+	inline long anticollision(Reader *reader,SerialNumber *sn = 0) {
+		sn = sn ? sn : &this->sn;
+		long ret = reader->send_command(ANTICOLLISION,sn);
 		if((ret & ERR_MASK) == PACKET_DATA_LEN_ERROR) {
-			sn.fix();
+			sn->fix();
 			return 0;
 		} else {
 			return ret;
@@ -139,6 +150,11 @@ struct Sector : public SectorBase
 EXPORT long card_scan(Reader* reader, Card *card)
 {
 	return card->scan(reader);
+}
+
+EXPORT long card_reset(Reader* reader, Card *card)
+{
+	return card->reset(reader);
 }
 
 EXPORT long card_sector_auth(Reader *reader, Card *card, Sector *sector)

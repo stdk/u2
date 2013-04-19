@@ -14,6 +14,8 @@ using namespace boost;
 #define PACKET_CRC_ERROR        0x0E0000CC
 #define PACKET_DATA_LEN_ERROR   0x0E0000DE
 
+#define WRONG_CARD              0x0C0000FF
+
 #define FBGN        0xFF
 #define FESC        0xF1
 #define TFBGN       0xF2
@@ -23,6 +25,9 @@ using namespace boost;
 #define NACK_BYTE	0x01
 
 #define CRC_LEN		2
+
+size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len,bool wait_for_fbgn = true);
+size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len);
 
 #pragma pack(push,1)
 struct PacketHeader

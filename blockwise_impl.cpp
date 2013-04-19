@@ -6,8 +6,6 @@
 #include <cstdio>
 
 void HandleLastError(const char *msg);
-size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len);
-size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len);
 HANDLE ComOpen(const char* path, uint32_t baud,uint32_t flags);
 void HandleLastError(const char *msg);
 

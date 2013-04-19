@@ -93,7 +93,7 @@ long create_custom_packet(void* packet,size_t *packet_len,uint8_t code,void *dat
 	return 0;
 }
 
-size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len)
+size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len,bool wait_for_fbgn)
 {
 	if(!dst_len || !src_len) return 0;
 
@@ -102,7 +102,7 @@ size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len)
 	uint8_t *dst = (uint8_t*)dst_buf;
 	uint8_t *dst_end = dst + dst_len;
 
-	while(src != src_end && *src != FBGN && src++);
+	while(wait_for_fbgn && src != src_end && *src != FBGN && src++);
 
 	//debug_data("src_buf",src,src_end-src);
 
@@ -148,15 +148,15 @@ size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len)
 
 EXPORT long bytestaffing_test(uint8_t *data,size_t len)
 {
-	//debug_data("data",data,len);
+	//debug_data("data_in",data,len);
 
 	scoped_array<uint8_t> bs(new uint8_t[len*2]);
 	size_t bs_len = bytestaff(bs.get(),len*2,data,len);
-	//debug_data("bs",bs.get(),bs_len);	
+	//debug_data("data_bs",bs.get(),bs_len);	
 
 	scoped_array<uint8_t> un_bs(new uint8_t[len]);
-	unbytestaff(un_bs.get(),len,bs.get(),bs_len);
-	//debug_data("un_bs",un_bs.get(),un_bs_len);
+	size_t un_bs_len = unbytestaff(un_bs.get(),len,bs.get(),bs_len,false);
+	//debug_data("data_un",un_bs.get(),un_bs_len);
 
 	return memcmp(un_bs.get(),data,len);
 }

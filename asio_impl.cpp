@@ -21,8 +21,6 @@ static const int log_level = 0;
 
 //define required functions from other modules
 void debug_data(const char* header,void* data,size_t len);
-size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len);
-size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len);
 
 static void read_callback(bool &data_available,asio::deadline_timer& timeout,size_t bytes_transferred,const system::error_code& error)
 {
