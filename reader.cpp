@@ -93,7 +93,7 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 	return 0;
 }
 
-EXPORT long reader_open(const char* path,uint32_t baud,const char* impl,Reader **reader)
+EXPORT long reader_open(const char *path,uint32_t baud,const char* impl,Reader **reader)
 {
 	try {
 		*reader = new Reader(path,baud,impl);
@@ -119,7 +119,17 @@ EXPORT long reader_close(Reader *reader)
 	}
 }
 
-EXPORT long crc16_calc(void* data,uint32_t len,uint8_t low_endian)
+EXPORT long reader_save(Reader *reader, const char* path)
+{
+	return reader->save(path);
+}
+
+EXPORT long reader_load(Reader *reader, const char* path)
+{
+	return reader->load(path);
+}
+
+EXPORT long crc16_calc(void *data,uint32_t len,uint8_t low_endian)
 {
 	uint8_t *buffer = (uint8_t*)data;
 
