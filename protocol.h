@@ -9,6 +9,7 @@ using namespace boost;
 #define IO_ERROR                0x0E000001
 #define TIMEOUT_ERROR           0x0E000002
 #define NO_IMPL                 0x0E0000F0
+#define NO_IMPL_SUPPORT         0x0E0000F1
 #define NO_ANSWER               0x0E0000A0
 #define WRONG_ANSWER            0x0E0000DF
 #define PACKET_CRC_ERROR        0x0E0000CC
@@ -105,6 +106,14 @@ public:
 	virtual long transceive(void* data,size_t len,void* packet,size_t packet_len) = 0;
 };
 
+class ISaveLoadable
+{
+public:
+	virtual ~ISaveLoadable();
+	virtual long load(const char *path)=0;
+	virtual long save(const char *path)=0;
+};
+
 class Reader
 {
 	IReaderImpl *impl;
@@ -129,6 +138,9 @@ public:
 	}
 
 	long send_command(void* packet,size_t packet_len,void* answer,size_t answer_len);
+
+	long save(const char* path);
+	long load(const char* path);
 };
 
 #endif //PROTOCOL_H
