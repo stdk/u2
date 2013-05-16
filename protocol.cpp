@@ -48,14 +48,14 @@ inline uint8_t* PacketHeader::data()
 	return (uint8_t*)this + sizeof(*this);
 }
 
-size_t PacketHeader::get_data(void* buf,size_t len)
+size_t PacketHeader::get_data(void *buf,size_t len)
 {
 	size_t copy_len = min(this->len,len);
 	memcpy(buf,data(),copy_len);
 	return copy_len;
 }
 
-uint16_t prepare_packet(uint8_t code,void* packet,size_t packet_len)
+uint16_t prepare_packet(uint8_t code,void *packet,size_t packet_len)
 {
 	PacketHeader* header = (PacketHeader*)packet;
 	header->head = FBGN;
@@ -71,12 +71,12 @@ uint16_t prepare_packet(uint8_t code,void* packet,size_t packet_len)
 	return (CRC16_High << 8) + CRC16_Low;
 }
 
-long create_custom_packet(void* packet,size_t *packet_len,uint8_t code,void *data,uint8_t len)
+long create_custom_packet(void *packet,size_t *packet_len,uint8_t code,void *data,uint8_t len)
 {
 	if(*packet_len < sizeof(PacketHeader)) return -1;
 
 	size_t max_packet_len = *packet_len; //save initial value for comparison
-	PacketHeader* header = (PacketHeader*)packet;
+	PacketHeader *header = (PacketHeader*)packet;
 	header->len = len;
 	
 	*packet_len = header->full_size();
@@ -93,7 +93,7 @@ long create_custom_packet(void* packet,size_t *packet_len,uint8_t code,void *dat
 	return 0;
 }
 
-size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len,bool wait_for_fbgn)
+size_t unbytestaff(void *dst_buf,size_t dst_len,void *src_buf,size_t src_len, bool wait_for_fbgn)
 {
 	if(!dst_len || !src_len) return 0;
 
@@ -183,7 +183,7 @@ void HandleLastError(const char *msg) {
     LocalFree(err);
 }
 
-HANDLE ComOpen(const char* path, uint32_t baud,uint32_t flags)
+HANDLE ComOpen(const char *path, uint32_t baud,uint32_t flags)
 {
 	COMMTIMEOUTS		CommTimeouts;
 	DCB					dcb;
@@ -236,6 +236,10 @@ IReaderImpl::~IReaderImpl()
 
 }
 
+ISaveLoadable::~ISaveLoadable()
+{
+
+}
 
 #ifdef WIN32
 IReaderImpl* create_blockwise_impl(const char* path,uint32_t baud);
@@ -260,7 +264,7 @@ Reader::~Reader()
 	delete impl;
 }
 
-long Reader::send_command(void* packet,size_t packet_len,void* answer,size_t answer_len)
+long Reader::send_command(void *packet,size_t packet_len,void *answer,size_t answer_len)
 {
 	if(!impl) return NO_IMPL;
 
@@ -280,4 +284,24 @@ long Reader::send_command(void* packet,size_t packet_len,void* answer,size_t ans
 	}
 
 	return 0;	
+}
+
+long Reader::save(const char *path)
+{
+	if(!impl) return NO_IMPL;
+
+	ISaveLoadable *save_load = dynamic_cast<ISaveLoadable*>(impl);
+	if(!save_load) return NO_IMPL_SUPPORT;
+
+	return save_load->save(path);
+}
+
+long Reader::load(const char *path)
+{
+	if(!impl) return NO_IMPL;
+
+	ISaveLoadable *save_load = dynamic_cast<ISaveLoadable*>(impl);
+	if(!save_load) return NO_IMPL_SUPPORT;
+
+	return save_load->load(path);
 }
