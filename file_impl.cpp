@@ -2,13 +2,21 @@
 #include "commands.h"
 #include "api_common.h"
 
+#include <boost/iostreams/device/file.hpp>
+
 #include <stdio.h>
 #include <map>
+#include <string>
 
 #include <cstring>
 #include <cstdlib>
 
+#define CARD_TYPE_STANDARD   0x4
+#define CARD_TYPE_ULTRALIGHT 0x44
+
 using namespace std;
+using boost::iostreams::file_source;
+using boost::iostreams::file_sink;
 
 struct Sector : public SectorBase
 {
@@ -17,11 +25,11 @@ struct Sector : public SectorBase
 		AUTHENTICATED = 1
 	};
 
-	uint8_t enc[3]; // encryption keys for every block, when reading or writing whole sector enc[0] assumed for it
+	uint8_t enc[3]; // encryption keys for every block, reading or writing whole sector assumes enc[0] 
 	uint8_t status; // 0 - no authentication, 1 - authenticated
 };
 
-class FileImpl : public IReaderImpl
+class FileImpl : public IReaderImpl, public ISaveLoadable
 {
 	typedef uint8_t (FileImpl::*command_handler)(void* in,size_t in_len,void* out,size_t *out_len);
 	typedef map<uint8_t,command_handler> HandlerMap;
@@ -33,21 +41,26 @@ public:
 	FileImpl(const char* path,uint32_t baud) {
 		fprintf(stderr,"FileImpl\n");
 
-		handlers[GET_SN]        = &FileImpl::get_sn;
-		handlers[GET_VERSION]   = &FileImpl::get_version;
-		handlers[FIELD_ON]      = &FileImpl::field_on;
-		handlers[FIELD_OFF]     = &FileImpl::field_off;
-		handlers[REQUEST_STD]   = &FileImpl::request_std;
-		handlers[ANTICOLLISION] = &FileImpl::anticollision;
-		handlers[AUTH]          = &FileImpl::auth;
-		handlers[AUTH_DYN]      = &FileImpl::auth_dyn;
-		handlers[BLOCK_READ]    = &FileImpl::block_read;
-		handlers[BLOCK_WRITE]   = &FileImpl::block_write;
-		handlers[SECTOR_READ]   = &FileImpl::sector_read;
-		handlers[SECTOR_WRITE]  = &FileImpl::sector_write;
-		handlers[SET_TRAILER]   = &FileImpl::set_trailer;
+		handlers[GET_SN]          = &FileImpl::get_sn;
+		handlers[GET_VERSION]     = &FileImpl::get_version;
+		handlers[FIELD_ON]        = &FileImpl::field_on;
+		handlers[FIELD_OFF]       = &FileImpl::field_off;
+		handlers[REQUEST_STD]     = &FileImpl::request_std;
+		handlers[ANTICOLLISION]   = &FileImpl::anticollision;
+		handlers[AUTH]            = &FileImpl::auth;
+		handlers[AUTH_DYN]        = &FileImpl::auth_dyn;
+		handlers[BLOCK_READ]      = &FileImpl::block_read;
+		handlers[BLOCK_WRITE]     = &FileImpl::block_write;
+		handlers[SECTOR_READ]     = &FileImpl::sector_read;
+		handlers[SECTOR_WRITE]    = &FileImpl::sector_write;
+		handlers[SET_TRAILER]     = &FileImpl::set_trailer;
+		handlers[SET_TRAILER_DYN] = &FileImpl::set_trailer_dyn;
 
-		sectors[11].key = 8;
+		memset(sectors,0,sizeof(sectors));
+
+		load(path);		
+
+		/*sectors[11].key = 8;
 		sectors[11].enc[0] = 0xFF;
 		sectors[11].enc[1] = 0xA;
 		sectors[11].enc[2] = 0xA;
@@ -55,11 +68,25 @@ public:
 		uint8_t x[16] = {0x99,0x41,0x3,0x0,0x5,0x0,0x4d,0x32,0xf1,0xdc,0x1,0xef,0xbc,0xd,0xc3,0xf1};
 
 		sectors[11][0][0] = 0x87;
-		sectors[11][1] = sectors[11][2] = x;
+		sectors[11][1] = sectors[11][2] = x;*/
 	}
 
 	virtual ~FileImpl() {
-	
+		
+	}
+
+	virtual long load(const char *path) {
+		file_source src(path,BOOST_IOS::binary);
+		streamsize bytes_read = src.read((char*)sectors,sizeof(sectors));
+		fprintf(stderr,"FileImpl load[%s] -> [%i][%s]\n",path,bytes_read,bytes_read == sizeof(sectors) ? "OK" : "FAIL");
+		return 0;
+	}
+
+	virtual long save(const char *path) {
+		file_sink dst(path,BOOST_IOS::binary);
+		streamsize bytes_written = dst.write((char*)sectors,sizeof(sectors));
+		fprintf(stderr,"FileImpl save[%s] -> [%i][%s]\n",path,bytes_written,bytes_written == sizeof(sectors) ? "OK" : "FAIL");
+		return 0;
 	}
 
 	long transceive(void* data,size_t len,void* packet,size_t packet_len) {
@@ -96,7 +123,7 @@ public:
 	}
 
 	uint8_t get_version(void* in,size_t in_len,void* out,size_t *out_len) {
-		static const char version[7] = "TEST01";
+		static const char version[7] = "F01";
 		*out_len = min(*out_len,sizeof(version));
 		memcpy(out,version,*out_len);
 		return 0;
@@ -113,7 +140,7 @@ public:
 	}
 
 	uint8_t request_std(void* in,size_t in_len,void* out,size_t *out_len) {
-		static const uint16_t type = 0x44;
+		static const uint16_t type = CARD_TYPE_STANDARD;
 		return make_answer(type,out,out_len);
 	}
 
@@ -138,9 +165,10 @@ public:
 
 		Sector* sector = sectors + request->sector;
 
-		fprintf(stderr,"sector[%i] mode[%i]\n",request->sector,sector->mode);
+		//fprintf(stderr,"sector[%i] mode[%i]\n",request->sector,sector->mode);
 		if(sector->mode == Sector::STATIC && sector->key == request->key) {
 			sector->status = Sector::AUTHENTICATED;
+			//fprintf(stderr,"sector[%i] status[%i]\n",request->sector,sector->status);
 		}
 
 		*out_len = 0;
@@ -156,6 +184,7 @@ public:
 		Sector* sector = sectors + request->sector;
 		if(sector->mode == Sector::DYNAMIC && sector->key == request->key) {
 			sector->status = Sector::AUTHENTICATED;
+			//fprintf(stderr,"sector[%i] status[%i]\n",request->sector,sector->status);
 		}
 
 		*out_len = 0;
@@ -168,7 +197,7 @@ public:
 		if(request->block >= sizeof(Sector::sector_t)/sizeof(Sector::block_t)) return ERROR_VALUE;
 
 		Sector* sector = sectors + request->sector;
-		fprintf(stderr,"key[%i] status[%i]\n",sector->key,sector->status);
+		//fprintf(stderr,"key[%i] status[%i]\n",sector->key,sector->status);
 		if(!sector->status) return ERROR_READ;
 		if(request->enc != sector->enc[request->block]) return ERROR_READ;
 		
@@ -221,6 +250,22 @@ public:
 
 		Sector* sector = sectors + request->sector;
 		if(!sector->status) return ERROR_WRITE;
+		
+		sector->mode = Sector::STATIC;
+		sector->key = request->key;
+
+		*out_len = 0;
+		return 0;
+	}
+
+	uint8_t set_trailer_dyn(void* in,size_t in_len,void* out,size_t *out_len) {
+		Sector::set_trailer_dynamic_request *request = (Sector::set_trailer_dynamic_request*)in;
+		if(request->sector >= sizeof(sectors)/sizeof(Sector)) return ERROR_VALUE;
+
+		Sector* sector = sectors + request->sector;
+		if(!sector->status) return ERROR_WRITE;
+
+		sector->mode = Sector::DYNAMIC;
 		sector->key = request->key;
 
 		*out_len = 0;
