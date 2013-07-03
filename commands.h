@@ -28,5 +28,6 @@
 #define SECTOR_WRITE         0xBF
 #define SET_TRAILER          0xC0
 #define SET_TRAILER_DYN      0xC1
+#define MFPLUS_PERSO         0x23
 
 #endif

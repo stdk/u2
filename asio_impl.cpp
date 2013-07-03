@@ -84,7 +84,7 @@ class AsioImpl : public IReaderImpl
 	asio::deadline_timer timeout;
 public:
 	AsioImpl(const char* path,uint32_t baud):serial(io_svc),timeout(io_svc) {
-		fprintf(stderr,"AsioImpl\n");
+		//fprintf(stderr,"AsioImpl\n");
 		serial.open( path );
 
 		const asio::serial_port_base::parity parity_opt(asio::serial_port_base::parity::none);

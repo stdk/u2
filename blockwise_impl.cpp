@@ -24,7 +24,7 @@ class BlockwiseImpl : public IReaderImpl
 #endif
 public:
 	BlockwiseImpl(const char* path,uint32_t baud) {
-		fprintf(stderr,"BlockwiseImpl\n");
+		//fprintf(stderr,"BlockwiseImpl\n");
 #ifdef USE_IOCP
 		uint32_t flags = FILE_FLAG_OVERLAPPED;
 #else

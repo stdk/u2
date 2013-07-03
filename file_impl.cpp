@@ -1,7 +1,3 @@
-#include "protocol.h"
-#include "commands.h"
-#include "api_common.h"
-
 #include <boost/iostreams/device/file.hpp>
 
 #include <stdio.h>
@@ -11,6 +7,11 @@
 #include <cstring>
 #include <cstdlib>
 
+#include "protocol.h"
+#include "card_storage.h"
+#include "commands.h"
+#include "api_common.h"
+
 #define CARD_TYPE_STANDARD   0x4
 #define CARD_TYPE_ULTRALIGHT 0x44
 
@@ -18,28 +19,17 @@ using namespace std;
 using boost::iostreams::file_source;
 using boost::iostreams::file_sink;
 
-struct Sector : public SectorBase
-{
-	 enum auth_status {
-		NO_AUTH = 0,
-		AUTHENTICATED = 1
-	};
-
-	uint8_t enc[3]; // encryption keys for every block, reading or writing whole sector assumes enc[0] 
-	uint8_t status; // 0 - no authentication, 1 - authenticated
-};
-
 class FileImpl : public IReaderImpl, public ISaveLoadable
 {
 	typedef uint8_t (FileImpl::*command_handler)(void* in,size_t in_len,void* out,size_t *out_len);
 	typedef map<uint8_t,command_handler> HandlerMap;
 	HandlerMap handlers;
 
-	Sector sectors[16];
+	CardStorage storage;	
 public:
 
 	FileImpl(const char* path,uint32_t baud) {
-		fprintf(stderr,"FileImpl\n");
+		//fprintf(stderr,"FileImpl\n");
 
 		handlers[GET_SN]          = &FileImpl::get_sn;
 		handlers[GET_VERSION]     = &FileImpl::get_version;
@@ -56,19 +46,7 @@ public:
 		handlers[SET_TRAILER]     = &FileImpl::set_trailer;
 		handlers[SET_TRAILER_DYN] = &FileImpl::set_trailer_dyn;
 
-		memset(sectors,0,sizeof(sectors));
-
-		load(path);		
-
-		/*sectors[11].key = 8;
-		sectors[11].enc[0] = 0xFF;
-		sectors[11].enc[1] = 0xA;
-		sectors[11].enc[2] = 0xA;
-
-		uint8_t x[16] = {0x99,0x41,0x3,0x0,0x5,0x0,0x4d,0x32,0xf1,0xdc,0x1,0xef,0xbc,0xd,0xc3,0xf1};
-
-		sectors[11][0][0] = 0x87;
-		sectors[11][1] = sectors[11][2] = x;*/
+		load(path);
 	}
 
 	virtual ~FileImpl() {
@@ -77,16 +55,18 @@ public:
 
 	virtual long load(const char *path) {
 		file_source src(path,BOOST_IOS::binary);
-		streamsize bytes_read = src.read((char*)sectors,sizeof(sectors));
-		fprintf(stderr,"FileImpl load[%s] -> [%i][%s]\n",path,bytes_read,bytes_read == sizeof(sectors) ? "OK" : "FAIL");
-		return 0;
+		streamsize bytes_read = src.read((char*)&storage,sizeof(storage));
+		long ret = bytes_read != sizeof(storage);
+		fprintf(stderr,"FileImpl load[%s] -> [%i][%s]\n",path,bytes_read,ret ? "FAIL" : "OK");
+		return ret;
 	}
 
 	virtual long save(const char *path) {
 		file_sink dst(path,BOOST_IOS::binary);
-		streamsize bytes_written = dst.write((char*)sectors,sizeof(sectors));
-		fprintf(stderr,"FileImpl save[%s] -> [%i][%s]\n",path,bytes_written,bytes_written == sizeof(sectors) ? "OK" : "FAIL");
-		return 0;
+		streamsize bytes_written = dst.write((char*)&storage,sizeof(storage));
+		long ret = bytes_written != sizeof(storage);
+		fprintf(stderr,"FileImpl save[%s] -> [%i][%s]\n",path,bytes_written,ret ? "FAIL" : "OK");
+		return ret;
 	}
 
 	long transceive(void* data,size_t len,void* packet,size_t packet_len) {
@@ -145,29 +125,32 @@ public:
 	}
 
 	uint8_t anticollision(void* in,size_t in_len,void* out,size_t *out_len) {
-		static const uint8_t answer[] = {0x00,0x04,0xAF,0xBC,0x0E,0xD0};
+		const size_t sn_len = 7;
+		uint8_t answer[2 + sn_len] = {0, sn_len };
+		memcpy(&answer[2],&storage.sn,sn_len);
+		
 		*out_len = min(*out_len,sizeof(answer));
 		memcpy(out,answer,*out_len);
 		return 0;
 	}	
 
 	void clear_card_auth() {
-		for(int i = 0;i < sizeof(sectors)/sizeof(Sector); i++) {
-			sectors[i].status = Sector::NO_AUTH;
+		for(int i = 0;i < sizeof(storage.sectors)/sizeof(SectorStorage); i++) {
+			storage.sectors[i].status = SectorStorage::NO_AUTH;
 		}
 	}
 
 	uint8_t auth(void* in,size_t in_len,void* out,size_t *out_len) {
 		Sector::auth_request *request = (Sector::auth_request*)in;
-		if(request->sector >= sizeof(sectors)/sizeof(Sector)) return ERROR_VALUE;
+		if(request->sector >= sizeof(storage.sectors)/sizeof(SectorStorage)) return ERROR_VALUE;
 			
 		clear_card_auth();
 
-		Sector* sector = sectors + request->sector;
+		SectorStorage* sector = storage.sectors + request->sector;
 
 		//fprintf(stderr,"sector[%i] mode[%i]\n",request->sector,sector->mode);
-		if(sector->mode == Sector::STATIC && sector->key == request->key) {
-			sector->status = Sector::AUTHENTICATED;
+		if(sector->mode == SectorStorage::STATIC && sector->key == request->key) {
+			sector->status = SectorStorage::AUTHENTICATED;
 			//fprintf(stderr,"sector[%i] status[%i]\n",request->sector,sector->status);
 		}
 
@@ -177,13 +160,13 @@ public:
 
 	uint8_t auth_dyn(void* in,size_t in_len,void* out,size_t *out_len) {
 		Sector::auth_request *request = (Sector::auth_request*)in;
-		if(request->sector >= sizeof(sectors)/sizeof(Sector)) return ERROR_VALUE;
+		if(request->sector >= sizeof(storage.sectors)/sizeof(SectorStorage)) return ERROR_VALUE;
 
 		clear_card_auth();
 
-		Sector* sector = sectors + request->sector;
-		if(sector->mode == Sector::DYNAMIC && sector->key == request->key) {
-			sector->status = Sector::AUTHENTICATED;
+		SectorStorage* sector = storage.sectors + request->sector;
+		if(sector->mode == SectorStorage::DYNAMIC && sector->key == request->key) {
+			sector->status = SectorStorage::AUTHENTICATED;
 			//fprintf(stderr,"sector[%i] status[%i]\n",request->sector,sector->status);
 		}
 
@@ -193,10 +176,10 @@ public:
 
 	uint8_t block_read(void* in,size_t in_len,void* out,size_t *out_len) {
 		Sector::read_block_request *request = (Sector::read_block_request*)in;
-		if(request->sector >= sizeof(sectors)/sizeof(Sector)) return ERROR_VALUE;
-		if(request->block >= sizeof(Sector::sector_t)/sizeof(Sector::block_t)) return ERROR_VALUE;
+		if(request->sector >= sizeof(storage.sectors)/sizeof(SectorStorage)) return ERROR_VALUE;
+		if(request->block >= sizeof(sector_t)/sizeof(block_t)) return ERROR_VALUE;
 
-		Sector* sector = sectors + request->sector;
+		SectorStorage* sector = storage.sectors + request->sector;
 		//fprintf(stderr,"key[%i] status[%i]\n",sector->key,sector->status);
 		if(!sector->status) return ERROR_READ;
 		if(request->enc != sector->enc[request->block]) return ERROR_READ;
@@ -206,10 +189,10 @@ public:
 
 	uint8_t block_write(void* in,size_t in_len,void* out,size_t *out_len) {
 		Sector::write_block_request *request = (Sector::write_block_request*)in;
-		if(request->sector >= sizeof(sectors)/sizeof(Sector)) return ERROR_VALUE;
-		if(request->block >= sizeof(Sector::sector_t)/sizeof(Sector::block_t)) return ERROR_VALUE;
+		if(request->sector >= sizeof(storage.sectors)/sizeof(SectorStorage)) return ERROR_VALUE;
+		if(request->block >= sizeof(sector_t)/sizeof(block_t)) return ERROR_VALUE;
 		
-		Sector* sector = sectors + request->sector;
+		SectorStorage* sector = storage.sectors + request->sector;
 		if(!sector->status) return ERROR_WRITE;
 		
 		sector->enc[request->block] = request->enc;
@@ -221,20 +204,20 @@ public:
 
 	uint8_t sector_read(void* in,size_t in_len,void* out,size_t *out_len) {
 		Sector::read_sector_request *request = (Sector::read_sector_request*)in;
-		if(request->sector >= sizeof(sectors)/sizeof(Sector)) return ERROR_VALUE;
+		if(request->sector >= sizeof(storage.sectors)/sizeof(SectorStorage)) return ERROR_VALUE;
 
-		Sector* sector = sectors + request->sector;
+		SectorStorage* sector = storage.sectors + request->sector;
 		if(!sector->status) return ERROR_READ;
 		if(request->enc != sector->enc[0]) return ERROR_READ;
 
-		return make_answer(sectors[request->sector].data,out,out_len);
+		return make_answer(storage.sectors[request->sector].data,out,out_len);
 	}
 
 	uint8_t sector_write(void* in,size_t in_len,void* out,size_t *out_len) {
 		Sector::write_sector_request *request = (Sector::write_sector_request*)in;
-		if(request->sector >= sizeof(sectors)/sizeof(Sector)) return ERROR_VALUE;
+		if(request->sector >= sizeof(storage.sectors)/sizeof(SectorStorage)) return ERROR_VALUE;
 		
-		Sector* sector = sectors + request->sector;
+		SectorStorage* sector = storage.sectors + request->sector;
 		if(!sector->status) return ERROR_WRITE;
 		
 		sector->enc[0] = request->enc;
@@ -246,12 +229,12 @@ public:
 
 	uint8_t set_trailer(void* in,size_t in_len,void* out,size_t *out_len) {
 		Sector::set_trailer_request *request = (Sector::set_trailer_request*)in;
-		if(request->sector >= sizeof(sectors)/sizeof(Sector)) return ERROR_VALUE;
+		if(request->sector >= sizeof(storage.sectors)/sizeof(SectorStorage)) return ERROR_VALUE;
 
-		Sector* sector = sectors + request->sector;
+		SectorStorage* sector = storage.sectors + request->sector;
 		if(!sector->status) return ERROR_WRITE;
 		
-		sector->mode = Sector::STATIC;
+		sector->mode = SectorStorage::STATIC;
 		sector->key = request->key;
 
 		*out_len = 0;
@@ -260,12 +243,12 @@ public:
 
 	uint8_t set_trailer_dyn(void* in,size_t in_len,void* out,size_t *out_len) {
 		Sector::set_trailer_dynamic_request *request = (Sector::set_trailer_dynamic_request*)in;
-		if(request->sector >= sizeof(sectors)/sizeof(Sector)) return ERROR_VALUE;
+		if(request->sector >= sizeof(storage.sectors)/sizeof(SectorStorage)) return ERROR_VALUE;
 
-		Sector* sector = sectors + request->sector;
+		SectorStorage* sector = storage.sectors + request->sector;
 		if(!sector->status) return ERROR_WRITE;
 
-		sector->mode = Sector::DYNAMIC;
+		sector->mode = SectorStorage::DYNAMIC;
 		sector->key = request->key;
 
 		*out_len = 0;

@@ -11,7 +11,7 @@ class BytewiseImpl : public IReaderImpl
 	HANDLE hCom;
 public:
 	BytewiseImpl(const char* path,uint32_t baud) {
-		fprintf(stderr,"BytewiseImpl\n");
+		//fprintf(stderr,"BytewiseImpl\n");
 		hCom = ComOpen(path,baud,0);
 	}
 

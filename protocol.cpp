@@ -285,23 +285,3 @@ long Reader::send_command(void *packet,size_t packet_len,void *answer,size_t ans
 
 	return 0;	
 }
-
-long Reader::save(const char *path)
-{
-	if(!impl) return NO_IMPL;
-
-	ISaveLoadable *save_load = dynamic_cast<ISaveLoadable*>(impl);
-	if(!save_load) return NO_IMPL_SUPPORT;
-
-	return save_load->save(path);
-}
-
-long Reader::load(const char *path)
-{
-	if(!impl) return NO_IMPL;
-
-	ISaveLoadable *save_load = dynamic_cast<ISaveLoadable*>(impl);
-	if(!save_load) return NO_IMPL_SUPPORT;
-
-	return save_load->load(path);
-}

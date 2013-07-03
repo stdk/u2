@@ -9,150 +9,127 @@
 using namespace std;
 using namespace boost;
 
-struct SerialNumber
-{
-	uint8_t sak;
-	uint8_t len;
-
-	//   0  1  2  3  4  5  6  7  8  9 10
-	//[ 10 10 10 10 10 10 10 10 10 10  0 ]
-	//[  0  0  0  7  7  7  7  7  7  7  0 ]
-	//[  0  0  0  0  0  0  5  5  5  5  5 ]
-	uint8_t sn[10 + 1]; //10 byte buffer for sn itself + 1 byte for checksum
-
-	//moves sn bytes to the left depending on its length 
-	//to assure correct positioning
-	void fix() {
-		if(len >= sizeof(sn)) return;
+void SerialNumber::fix() {
+	if(len >= sizeof(sn)) return;
 		
-		uint8_t buf[sizeof(sn)] = {0};
-		copy(sn,sn+len,buf);
+	uint8_t buf[sizeof(sn)] = {0};
+	copy(sn,sn+len,buf);
 		
-		size_t shift = sizeof(sn) - (len + 1);
-		memset(sn,0,shift);
-		copy(buf,buf + len,&sn[shift]);
+	size_t shift = sizeof(sn) - (len + 1);
+	memset(sn,0,shift);
+	copy(buf,buf + len,&sn[shift]);
 
-		sn[sizeof(sn)-1] = buf[0] ^ buf[1] ^ buf[2] ^ buf[3];		
-	}
+	sn[sizeof(sn)-1] = buf[0] ^ buf[1] ^ buf[2] ^ buf[3];		
+}
 
-	bool operator==(const SerialNumber &other) {
-		return memcmp(sn,other.sn,sizeof(this->sn)) == 0;
-	}
+bool SerialNumber::operator==(const SerialNumber &other) {
+	return memcmp(sn,other.sn,sizeof(this->sn)) == 0;
+}
 
-	//uint64_t getSN64() { return *(uint64_t*)sn; }
-	inline SN5* sn5() {
-		return (SN5*)&sn[6];
-	}
-	inline uint8_t* sn7() {
-		return &sn[3];
-	}
-};
-
-struct Card
+long Card::mfplus_personalize(Reader *reader)
 {
-	SerialNumber sn;	
-	uint16_t type;	
+	return reader->send_command(MFPLUS_PERSO);
+}
 
-	inline long scan(Reader *reader) {
-		CHECK(request_std(reader));
-		return anticollision(reader);
+long Card::scan(Reader *reader) {
+	CHECK(request_std(reader));
+	return anticollision(reader);
+}
+
+long Card::reset(Reader *reader) {
+	uint16_t type;
+	CHECK(request_std(reader,&type));
+	if(this->type != type) return WRONG_CARD;
+	SerialNumber sn;
+	CHECK(anticollision(reader,&sn));
+	return this->sn == sn ? 0 : WRONG_CARD;
+}
+
+long Card::request_std(Reader *reader,uint16_t *type) {
+	type = type ? type : &this->type;
+	return reader->send_command(REQUEST_STD,type);
+}
+
+long Card::anticollision(Reader *reader,SerialNumber *sn) {
+	sn = sn ? sn : &this->sn;
+	long ret = reader->send_command(ANTICOLLISION,sn);
+	if((ret & ERR_MASK) == PACKET_DATA_LEN_ERROR) {
+		sn->fix();
+		return 0;
+	} else {
+		return ret;
 	}
+}
 
-	inline long reset(Reader *reader) {
-		uint16_t type;
-		CHECK(request_std(reader,&type));
-		if(this->type != type) return WRONG_CARD;
-		SerialNumber sn;
-		CHECK(anticollision(reader,&sn));
-		return this->sn == sn ? 0 : WRONG_CARD;
-	}
+long Card::select(Reader *reader) {
+	return reader->send_command(SELECT,sn.sn5(),0);
+}
 
-	inline long request_std(Reader *reader,uint16_t *type = 0) {
-		type = type ? type : &this->type;
-		return reader->send_command(REQUEST_STD,type);
-	}
+/* -------------------------------------------------- */
 
-	inline long anticollision(Reader *reader,SerialNumber *sn = 0) {
-		sn = sn ? sn : &this->sn;
-		long ret = reader->send_command(ANTICOLLISION,sn);
-		if((ret & ERR_MASK) == PACKET_DATA_LEN_ERROR) {
-			sn->fix();
-			return 0;
-		} else {
-			return ret;
-		}
-	}
+Sector::Sector(uint8_t _num, uint8_t _key, uint8_t _mode):num(_num),key(_key),mode(_mode) {
+	memset(&data,0,sizeof(data));
+}
 
-	inline long select(Reader *reader) {
-		return reader->send_command(SELECT,sn.sn5(),0);
-	}
-}; // sizeof == 20
+long Sector::authenticate(Reader *reader,Card *card) {
+	const int code = this->mode ? AUTH_DYN : AUTH;
+	auth_request request = { this->key, this->num, *card->sn.sn5() };
+	return reader->send_command(code,&request,(uint8_t*)0);
+}
 
-/*
- Sector class: represents sector on a Mifare Standard card.
- Contains information about sector num, sector key, sector authentication mode and sector data.
- Provides interface to authenticate this sector for a given card and two ways of interacting with
- sector data: either by blocks or as a whole sector.
- sizeof(Sector) == 51
-*/
-struct Sector : public SectorBase
-{
-	inline long authenticate(Reader *reader,Card *card) {
-		const int code = this->mode ? AUTH_DYN : AUTH;
-		auth_request request = { this->key, this->num, *card->sn.sn5() };
-		return reader->send_command(code,&request,(uint8_t*)0);
-	}
+/* ------------------------- */
 
-	/* ------------------------- */
+long Sector::read_block(Reader *reader, uint8_t block, uint8_t enc) {
+	if(block >= sizeof(this->data.blocks)/sizeof(block_t)) return -1;
 
-	inline long read_block(Reader *reader, uint8_t block, uint8_t enc) {
-		if(block >= sizeof(this->data.blocks)/sizeof(block_t)) return -1;
+	read_block_request request = { block, this->num, enc };
+	return reader->send_command(BLOCK_READ,&request, &this->data.blocks[block]);
+}
 
-		read_block_request request = { block, this->num, enc };
-		return reader->send_command(BLOCK_READ,&request, &this->data.blocks[block]);
-	}
+long Sector::write_block(Reader *reader, uint8_t block, uint8_t enc) {
+	if(block >= sizeof(this->data.blocks)/sizeof(block_t)) return -1;
 
-	inline long write_block(Reader *reader, uint8_t block, uint8_t enc) {
-		if(block >= sizeof(this->data.blocks)/sizeof(block_t)) return -1;
+	write_block_request request = { this->data.blocks[block], block, this->num, enc };
+	return reader->send_command(BLOCK_WRITE,&request, (uint8_t*)0);
+}
 
-		write_block_request request = { this->data.blocks[block], block, this->num, enc };
-		return reader->send_command(BLOCK_WRITE,&request, (uint8_t*)0);
-	}
+/* ------------------------- */
 
-	/* ------------------------- */
+long Sector::read(Reader* reader, uint8_t enc) {
+	read_sector_request request = { this->num, enc };
+	return reader->send_command(SECTOR_READ,&request,&this->data);
+}
 
-	inline long read(Reader* reader, uint8_t enc) {
-		read_sector_request request = { this->num, enc };
-		return reader->send_command(SECTOR_READ,&request,&this->data);
-	}
+long Sector::write(Reader* reader, uint8_t enc) {
+	write_sector_request request = { this->data, this->num, enc };
+	return reader->send_command(SECTOR_WRITE,&request,(uint8_t*)0);
+}
 
-	inline long write(Reader* reader, uint8_t enc) {
-		write_sector_request request = { this->data, this->num, enc };
-		return reader->send_command(SECTOR_WRITE,&request,(uint8_t*)0);
-	}
+/* ------------------------- */
 
-	/* ------------------------- */
+long Sector::set_trailer(Reader *reader) {
+	set_trailer_request request = { this->num, this->key };
+	return reader->send_command(SET_TRAILER,&request,(uint8_t*)0);
+}
 
-	inline long set_trailer(Reader* reader) {
-		set_trailer_request request = { this->num, this->key };
-		return reader->send_command(SET_TRAILER,&request,(uint8_t*)0);
-	}
-
-	inline long set_trailer_dynamic(Reader* reader,Card * card) {
-		set_trailer_dynamic_request request = { this->num, this->key, *card->sn.sn5() };
-		return reader->send_command(SET_TRAILER,&request,(uint8_t*)0);
-	}
-};
-
+long Sector::set_trailer_dynamic(Reader *reader,Card *card) {
+	set_trailer_dynamic_request request = { this->num, this->key, *card->sn.sn5() };
+	return reader->send_command(SET_TRAILER,&request,(uint8_t*)0);
+}
 
 /* library interface for card */
 
-EXPORT long card_scan(Reader* reader, Card *card)
+EXPORT long card_mfplus_personalize(Reader* reader, Card *card)
+{
+	return card->mfplus_personalize(reader);
+}
+
+EXPORT long card_scan(Reader *reader, Card *card)
 {
 	return card->scan(reader);
 }
 
-EXPORT long card_reset(Reader* reader, Card *card)
+EXPORT long card_reset(Reader *reader, Card *card)
 {
 	return card->reset(reader);
 }
@@ -182,12 +159,12 @@ EXPORT long card_block_write(Reader *reader, Sector *sector,uint8_t block, uint8
 	return sector->write_block(reader, block, enc);	
 }
 
-EXPORT long card_sector_set_trailer(Reader* reader, Sector *sector)
+EXPORT long card_sector_set_trailer(Reader *reader, Sector *sector)
 {
 	return sector->set_trailer(reader);
 }	
 
-EXPORT long card_sector_set_trailer_dynamic(Reader* reader, Sector *sector, Card *card)
+EXPORT long card_sector_set_trailer_dynamic(Reader *reader, Sector *sector, Card *card)
 {
 	return sector->set_trailer_dynamic(reader,card);
 }
