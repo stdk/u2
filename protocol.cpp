@@ -249,16 +249,24 @@ IReaderImpl* create_asio_impl(const char* path,uint32_t baud);
 IReaderImpl* create_asio_mt_impl(const char* path,uint32_t baud);
 IReaderImpl* create_file_impl(const char* path,uint32_t baud);
 
-Reader::Reader(const char* path,uint32_t baud,const char* impl_tag):impl(0)
+static IReaderImpl * get_impl(const char* path, uint32_t baud,const char* impl_tag)
 {
 	std::string s = std::string(impl_tag);
 #ifdef WIN32
-	if(s == "bytewise") impl = create_bytewise_impl(path,baud);
-	if(s == "blockwise") impl = create_blockwise_impl(path,baud);
+	if(s == "bytewise") return create_bytewise_impl(path,baud);
+	if(s == "blockwise") return create_blockwise_impl(path,baud);
 #endif
-	if(s == "asio") impl = create_asio_impl(path,baud);
-	if(s == "asio-mt") impl = create_asio_mt_impl(path,baud);
-	if(s == "file") impl = create_file_impl(path,baud);	
+    if(s == "asio-mt") return create_asio_mt_impl(path,baud);
+	if(s == "asio") return create_asio_impl(path,baud);
+	
+	if(s == "file") return create_file_impl(path,baud);	
+
+	return 0;
+}
+
+Reader::Reader(const char* path,uint32_t baud,const char* impl_tag):impl(0)
+{
+	impl = get_impl(path,baud,impl_tag);
 }
 
 Reader::~Reader()
