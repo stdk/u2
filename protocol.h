@@ -11,6 +11,7 @@ using namespace boost;
 #define NO_IMPL                 0x0E0000F0
 #define NO_IMPL_SUPPORT         0x0E0000F1
 #define NO_ANSWER               0x0E0000A0
+#define ANSWER_TOO_LONG         0x0E0000AF
 #define WRONG_ANSWER            0x0E0000DF
 #define PACKET_CRC_ERROR        0x0E0000CC
 #define PACKET_DATA_LEN_ERROR   0x0E0000DE
