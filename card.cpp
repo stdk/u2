@@ -32,8 +32,11 @@ long Card::mfplus_personalize(Reader *reader)
 }
 
 long Card::scan(Reader *reader) {
-	CHECK(request_std(reader));
-	return anticollision(reader);
+	long ret = request_std(reader);
+	if(ret > 0) return ret < ERROR_BASE ? NO_CARD : ret;
+	
+	ret =  anticollision(reader);
+	return ret > 0 && ret < ERROR_BASE ? NO_CARD : ret;
 }
 
 long Card::reset(Reader *reader) {
