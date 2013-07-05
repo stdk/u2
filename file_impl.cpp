@@ -1,5 +1,3 @@
-#include <boost/iostreams/device/file.hpp>
-
 #include <stdio.h>
 #include <map>
 #include <string>
@@ -16,8 +14,6 @@
 #define CARD_TYPE_ULTRALIGHT 0x44
 
 using namespace std;
-using boost::iostreams::file_source;
-using boost::iostreams::file_sink;
 
 class FileImpl : public IReaderImpl, public ISaveLoadable
 {
@@ -28,7 +24,7 @@ class FileImpl : public IReaderImpl, public ISaveLoadable
 	CardStorage storage;	
 public:
 
-	FileImpl(const char* path,uint32_t baud) {
+	FileImpl(const char* path,uint32_t baud):storage(path) {
 		//fprintf(stderr,"FileImpl\n");
 
 		handlers[GET_SN]          = &FileImpl::get_sn;
@@ -46,7 +42,6 @@ public:
 		handlers[SET_TRAILER]     = &FileImpl::set_trailer;
 		handlers[SET_TRAILER_DYN] = &FileImpl::set_trailer_dyn;
 
-		load(path);
 	}
 
 	virtual ~FileImpl() {
@@ -54,19 +49,11 @@ public:
 	}
 
 	virtual long load(const char *path) {
-		file_source src(path,BOOST_IOS::binary);
-		streamsize bytes_read = src.read((char*)&storage,sizeof(storage));
-		long ret = bytes_read != sizeof(storage);
-		fprintf(stderr,"FileImpl load[%s] -> [%i][%s]\n",path,bytes_read,ret ? "FAIL" : "OK");
-		return ret;
+		return storage.load(path);
 	}
 
 	virtual long save(const char *path) {
-		file_sink dst(path,BOOST_IOS::binary);
-		streamsize bytes_written = dst.write((char*)&storage,sizeof(storage));
-		long ret = bytes_written != sizeof(storage);
-		fprintf(stderr,"FileImpl save[%s] -> [%i][%s]\n",path,bytes_written,ret ? "FAIL" : "OK");
-		return ret;
+		return storage.save(path);
 	}
 
 	long transceive(void* data,size_t len,void* packet,size_t packet_len) {
