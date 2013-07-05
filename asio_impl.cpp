@@ -73,7 +73,7 @@ static bool check_callback(uint8_t *b,PacketHeader *header,size_t header_len,siz
 
 static void wait_callback(asio::serial_port& serial, const system::error_code& error)
 {
-  if (error) return;   // Data was read and this timeout was canceled
+  if (error) return;   // Data has been read and this timeout was canceled
   serial.cancel();     // will cause read_callback to fire with an error
 }
 
