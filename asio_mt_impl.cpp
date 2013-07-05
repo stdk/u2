@@ -17,7 +17,7 @@
 using namespace std;
 using namespace boost;
 
-#define PACKET_RECEIVE_TIMEOUT 3000
+#define PACKET_RECEIVE_TIMEOUT 2000
 
 static const int log_level = 0;
 
@@ -43,6 +43,7 @@ class AsioMTImpl : public IReaderImpl
 	unsigned char write_buf[512];	
 
 	boost::promise<size_t> promise;
+	
 	boost::promise<bool> stop_promise;
 	boost::unique_future<bool> stopped;
 
@@ -173,18 +174,18 @@ long AsioMTImpl::transceive(void* data,size_t len,void* packet,size_t packet_len
 	PacketHeader *header = (PacketHeader*)packet;
 	try {
 		boost::promise<size_t> new_promise;
-		promise.swap(new_promise);
-		boost::unique_future<size_t> packet_length = promise.get_future();
+		boost::unique_future<size_t> response_length_future = new_promise.get_future();
+		promise.swap(new_promise);		
 		
 		asio::write(this->serial,asio::buffer(write_buf,write_buf_len));
 		
 		this->timeout.expires_from_now(posix_time::milliseconds(PACKET_RECEIVE_TIMEOUT));
 		this->timeout.async_wait(bind(&AsioMTImpl::wait_callback, this, boost::asio::placeholders::error));
 
-		size_t len = packet_length.get();
-		if(!len) return NO_ANSWER;
-		if(len > packet_len) return ANSWER_TOO_LONG;
-		memcpy(packet,packet_buf,min(len,packet_len));
+		size_t response_length = response_length_future.get();
+		if(!response_length) return NO_ANSWER;
+		if(response_length > packet_len) return ANSWER_TOO_LONG;
+		memcpy(packet,packet_buf,min(response_length,packet_len));
 
 		return 0;	
 
