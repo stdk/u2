@@ -6,8 +6,12 @@ using namespace boost;
 
 #define ERR_MASK                0xFF0000FF
 
+#define ERROR_BASE              0x0A000000
+
+#define NO_CARD                 0x0C000000
+#define WRONG_CARD              0x0C0000FF
+
 #define IO_ERROR                0x0E000001
-#define TIMEOUT_ERROR           0x0E000002
 #define NO_IMPL                 0x0E0000F0
 #define NO_IMPL_SUPPORT         0x0E0000F1
 #define NO_ANSWER               0x0E0000A0
@@ -16,7 +20,6 @@ using namespace boost;
 #define PACKET_CRC_ERROR        0x0E0000CC
 #define PACKET_DATA_LEN_ERROR   0x0E0000DE
 
-#define WRONG_CARD              0x0C0000FF
 
 #define FBGN        0xFF
 #define FESC        0xF1
