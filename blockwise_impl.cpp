@@ -134,11 +134,11 @@ public:
 		COMSTAT comstat = {0};
 
 		while(GetTickCount() < time_limit) {		
-//			ClearCommError(hCom,&errors,&comstat);
-//			if(!comstat.cbInQue) continue;
+			//ClearCommError(hCom,&errors,&comstat);
+			//if(!comstat.cbInQue) continue;
 
 			DWORD bytes_read_current = 0;
-			if(!read(read_buf+bytes_read,/*comstat.cbInQue*/1,&bytes_read_current)) return IO_ERROR;
+			if(!read(read_buf+bytes_read,1,&bytes_read_current)) return IO_ERROR;
 			bytes_read += bytes_read_current;
 
 			size_t buf_len = unbytestaff(packet,packet_len,read_buf,bytes_read);
