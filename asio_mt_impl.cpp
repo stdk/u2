@@ -40,12 +40,12 @@ class AsioMTImpl : public IReaderImpl
 	
 	unsigned char read_buf[512];
 	unsigned char packet_buf[512];
-	unsigned char write_buf[512];	
+	unsigned char write_buf[512];
 
-	boost::promise<size_t> promise;
+	weak_ptr< promise<size_t> > result_promise;
 	
-	boost::promise<bool> stop_promise;
-	boost::unique_future<bool> stopped;
+	promise<bool> stop_promise;
+	unique_future<bool> stopped;
 
 	// read_callback - this callback sets data_available flag and cancels timeout callback to
 	// prevent its calling. 
@@ -94,7 +94,9 @@ class AsioMTImpl : public IReaderImpl
 		// unbytestaffed packet length should be at least as long as its header specifies
 		if(packet_len < ((PacketHeader*)packet_buf)->full_size()) return false;
 
-		promise.set_value(packet_len);
+		if(shared_ptr< promise<size_t> > p = result_promise.lock()) {
+			p->set_value(packet_len);
+		}
 
 		return true; // will cause read_callback to fire without error
 	}
@@ -106,16 +108,81 @@ class AsioMTImpl : public IReaderImpl
 	// Initiated in AsioImpl::tranceive
 	void wait_callback(const system::error_code& error)
 	{
-		if (error) return;   // Data was read and this timeout was canceled
-		serial.cancel();     // will cause read_callback to fire with an error
+		if (error) {
+			//cerr << "wait_callback error:" << error << ": " << error.message() << endl;
+			return;   // Data was read and this timeout was canceled
+		}
+		if(log_level) cerr << "wait_callback"<< endl;
+				
+		//serial.cancel();
 
-		promise.set_value(0);
+		if(shared_ptr< promise<size_t> > p = result_promise.lock()) {
+			p->set_value(0);
+		}
+	}
+
+	unsigned char *read_buf_current;
+
+	void read_callback2(size_t bytes_transferred,const system::error_code& error)
+	{
+		if (error || !bytes_transferred)
+		{
+			cerr << "read callback error:" << error << ": " << error.message() << endl;
+			read_buf_current = read_buf;
+			return initiate_read();
+		}
+
+		read_buf_current += bytes_transferred;
+
+		cerr << read_buf_current - read_buf << endl;
+		if(read_buf_current - read_buf < 5) {
+			debug_data("x",read_buf,read_buf_current - read_buf);
+		}
+
+		if(log_level) debug_data("Check callback bytes",read_buf,read_buf_current - read_buf);
+	
+		// data from serial port should begin from correct byte
+		uint8_t* packet_begin = find_packet_begin(read_buf,bytes_transferred);
+		if(!packet_begin) {
+			read_buf_current = read_buf;
+			return initiate_read();
+		}
+	
+		size_t current_length = read_buf_current - packet_begin;
+		
+		if(log_level) debug_data("Selected",packet_begin,current_length);
+
+		// there should be at least sizeof(PacketHeader) bytes to treat data as packet
+		if(current_length <= sizeof(PacketHeader)) return initiate_read();
+
+		size_t packet_len = unbytestaff(packet_buf,sizeof(packet_buf),packet_begin,current_length);
+		if(log_level) debug_data("Unbytestaffed",packet_buf,packet_len);
+
+		// unbytestaffed packet length should be at least as long as its header specifies
+		if(packet_len < ((PacketHeader*)packet_buf)->full_size()) return initiate_read();
+
+		//debug_data("in",read_buf,bytes_transferred);
+
+		if(shared_ptr< promise<size_t> > p = result_promise.lock()) {
+			p->set_value(packet_len);
+		}	
+
+		//timeout can now be canceled.
+		timeout.cancel(); 
+
+		read_buf_current = read_buf;
+		initiate_read();
 	}
 
 	// Begin new iteration of packet read by executing async_read 
 	// that keeps io_service running to wait for new packet
 	inline void initiate_read() {
 		namespace ph = boost::asio::placeholders;
+		 
+		
+
+		/*asio::async_read(this->serial,asio::buffer(read_buf_current,sizeof(read_buf) - (read_buf_current - read_buf)),
+			bind(&AsioMTImpl::read_callback2,this,ph::bytes_transferred,ph::error));*/
 
 		asio::async_read(this->serial,asio::buffer(read_buf),
 			bind(&AsioMTImpl::check_callback,this,ph::bytes_transferred,ph::error),
@@ -136,6 +203,7 @@ public:
 		serial.set_option(stop_bits_opt);
 		serial.set_option(asio::serial_port_base::flow_control(asio::serial_port_base::flow_control::none)); 
 
+		read_buf_current = read_buf;
 		initiate_read();
 
 		thread t(bind(&AsioMTImpl::io_service_thread,this));
@@ -143,6 +211,7 @@ public:
 	}
 
 	void io_service_thread() {
+
 		while(true) {
 			try {
 				io_svc.run();
@@ -151,7 +220,7 @@ public:
 				return;
 			} catch(boost::system::system_error& e) {
 				cerr << "io_service_thread:" << e.what() << endl;
-				promise.set_exception(current_exception());
+				//promise.set_exception(current_exception());
 				io_svc.reset();
 			}
 		}
@@ -173,10 +242,11 @@ long AsioMTImpl::transceive(void* data,size_t len,void* packet,size_t packet_len
 
 	PacketHeader *header = (PacketHeader*)packet;
 	try {
-		boost::promise<size_t> new_promise;
-		boost::unique_future<size_t> response_length_future = new_promise.get_future();
-		promise.swap(new_promise);		
-		
+		shared_ptr< promise<size_t> > new_promise( new promise<size_t>() );
+		unique_future<size_t> response_length_future = new_promise->get_future();
+
+		result_promise = new_promise;
+				
 		asio::write(this->serial,asio::buffer(write_buf,write_buf_len));
 		
 		this->timeout.expires_from_now(posix_time::milliseconds(PACKET_RECEIVE_TIMEOUT));
