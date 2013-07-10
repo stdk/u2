@@ -208,10 +208,10 @@ HANDLE ComOpen(const char *path, uint32_t baud,uint32_t flags)
 
 	// set the timeout values
 	CommTimeouts.ReadIntervalTimeout			= 1;
-	CommTimeouts.ReadTotalTimeoutMultiplier		= 1;
-	CommTimeouts.ReadTotalTimeoutConstant		= 1;
-	CommTimeouts.WriteTotalTimeoutMultiplier	= 1;
-	CommTimeouts.WriteTotalTimeoutConstant		= 1;
+	CommTimeouts.ReadTotalTimeoutMultiplier		= 0;
+	CommTimeouts.ReadTotalTimeoutConstant		= 0;
+	CommTimeouts.WriteTotalTimeoutMultiplier	= 0;
+	CommTimeouts.WriteTotalTimeoutConstant		= 0;
 
 	// configure
 	if (SetCommTimeouts(hCom, &CommTimeouts))
