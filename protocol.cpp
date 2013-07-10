@@ -43,14 +43,14 @@ uint32_t PacketHeader::nack_data()
 	return result;
 }
 
-inline uint8_t* PacketHeader::data() 
+uint8_t* PacketHeader::data() 
 {
 	return (uint8_t*)this + sizeof(*this);
 }
 
 size_t PacketHeader::get_data(void *buf,size_t len)
 {
-	size_t copy_len = min(this->len,len);
+	size_t copy_len = std::min((size_t)this->len,len);
 	memcpy(buf,data(),copy_len);
 	return copy_len;
 }

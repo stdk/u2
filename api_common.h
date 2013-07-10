@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cstdio>
 #include <boost/cstdint.hpp>
+#include <algorithm>
 using namespace boost;
 
 #define BLOCK_LENGTH 16
@@ -66,7 +67,7 @@ struct block_t {
 		
 	template<typename T, size_t N>
 	inline block_t& operator=(T(& ptr)[N]) {
-		size_t len = min(sizeof(*this),sizeof(T)*N);
+		size_t len = std::min(sizeof(*this),sizeof(T)*N);
 		fprintf(stderr,"A:copying %i bytes\n",len);			
 		memcpy(this,ptr,len);
 		return *this;
@@ -74,7 +75,7 @@ struct block_t {
 
 	template<typename T>
 	inline block_t& operator=(T& ptr) {
-		size_t len = min(sizeof(*this),sizeof(T));
+		size_t len = std::min(sizeof(*this),sizeof(T));
 		fprintf(stderr,"B:copying %i bytes\n",len);	
 		memcpy(this,&ptr,len);
 		return *this;
@@ -90,7 +91,7 @@ struct sector_t {
 
 	template<typename T, size_t N>
 	inline sector_t& operator=(T(& ptr)[N]) {
-		memcpy(this,ptr,min(sizeof(*this),sizeof(T)*N));
+		memcpy(this,ptr,std::min(sizeof(*this),sizeof(T)*N));
 		return *this;
 	}
 };

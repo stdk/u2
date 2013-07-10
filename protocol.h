@@ -60,7 +60,7 @@ struct PacketHeader
 
 	//Returns pointer to data section of this packet or 0
 	//if there is no data in packet.
-	inline uint8_t* data();
+	uint8_t* data();
 
 	uint8_t head;
 	uint8_t addr;
