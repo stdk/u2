@@ -12,6 +12,9 @@
 #include <iostream>
 #include <string>
 #include <cstring>
+#include <algorithm>
+
+using namespace std;
 
 void debug_data(const char* header,void* data,size_t len)
 {
@@ -50,7 +53,7 @@ uint8_t* PacketHeader::data()
 
 size_t PacketHeader::get_data(void *buf,size_t len)
 {
-	size_t copy_len = std::min((size_t)this->len,len);
+	size_t copy_len = min((size_t)this->len,len);
 	memcpy(buf,data(),copy_len);
 	return copy_len;
 }
