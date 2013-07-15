@@ -68,7 +68,7 @@ struct block_t {
 	template<typename T, size_t N>
 	inline block_t& operator=(T(& ptr)[N]) {
 		size_t len = std::min(sizeof(*this),sizeof(T)*N);
-		fprintf(stderr,"A:copying %i bytes\n",len);			
+		//fprintf(stderr,"A:copying %i bytes\n",len);			
 		memcpy(this,ptr,len);
 		return *this;
 	}
@@ -76,7 +76,7 @@ struct block_t {
 	template<typename T>
 	inline block_t& operator=(T& ptr) {
 		size_t len = std::min(sizeof(*this),sizeof(T));
-		fprintf(stderr,"B:copying %i bytes\n",len);	
+		//fprintf(stderr,"B:copying %i bytes\n",len);	
 		memcpy(this,&ptr,len);
 		return *this;
 	}
