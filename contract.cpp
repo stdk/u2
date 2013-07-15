@@ -109,7 +109,7 @@ EXPORT void term_init(MFSTD1KContractStatic302h* term, term_init_args* init)
 	term->Block0.ContractFields.Identifier = 0x89;
 	term->Block0.ContractFields.AID = init->aid;
 	term->Block0.ContractFields.PIX = init->pix;
-	term->Block0.ContractFields.SaleAID = 0xD01;
+	term->Block0.ContractFields.SaleAID = (init->aid & 0xF0F);
 	term->Block0.ContractFields.ContractDataPointer = 14;
 	term->Block0.ContractFields.ContractStatus = init->status;
 	term->Block0.ContractFields.TransportType = (init->pix >> 3) & 0x1F; // select 6 bits from PIX
@@ -118,7 +118,7 @@ EXPORT void term_init(MFSTD1KContractStatic302h* term, term_init_args* init)
 	term->Block1.ContractFields.ContractDoubleUseDurationUnit = 1;
 	term->Block1.ContractFields.ValidityStartDate = init->start;
 	term->Block1.ContractFields.ValidityEndDate = init->end;
-	term->Block1.ContractFields.ValidityLimitDate = init->limit;	
+	term->Block1.ContractFields.ValidityLimitDate = init->limit;
 }
 
 #pragma pack (push,1)
