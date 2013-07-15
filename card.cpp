@@ -117,7 +117,7 @@ long Sector::set_trailer(Reader *reader) {
 
 long Sector::set_trailer_dynamic(Reader *reader,Card *card) {
 	set_trailer_dynamic_request request = { this->num, this->key, *card->sn.sn5() };
-	return reader->send_command(SET_TRAILER,&request,(uint8_t*)0);
+	return reader->send_command(SET_TRAILER_DYN,&request,(uint8_t*)0);
 }
 
 /* library interface for card */
