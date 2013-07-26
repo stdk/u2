@@ -29,7 +29,7 @@ uint64_t CardStorage::generate_random_sn() {
 	typedef boost::variate_generator<base_gen_type&, distribution_type> gen_type;
 
 	base_gen_type base_gen(static_cast<unsigned int>(std::time(0)));
-	distribution_type distribution(1,(((uint64_t)1) << 64) - 1);
+	distribution_type distribution(1,(((uint64_t)1) << 63) - 1);
 	gen_type gen(base_gen,distribution);
 	uint64_t random_sn = gen();
 	fprintf(stderr,"random sn: %llX\n",random_sn);

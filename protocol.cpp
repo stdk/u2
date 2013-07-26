@@ -5,11 +5,13 @@
 #include <boost/scoped_array.hpp>
 
 #ifdef WIN32
+#define NOMINMAX
 #include <windows.h>
 #endif
 
 #include <time.h>
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <cstring>
 #include <algorithm>
@@ -21,7 +23,7 @@ void debug_data(const char* header,void* data,size_t len)
 	uint8_t *bytes = (uint8_t*)data;
 	std::cerr << header << ": ";
 	for(size_t i=0;i<len;i++) {
-		std::cerr << std::hex << (unsigned int)bytes[i] << " ";
+		std::cerr << std::hex << setw(2) <<(unsigned int)bytes[i] << " ";
 	}
 	std::cerr << std::endl;
 }
@@ -163,76 +165,41 @@ EXPORT long bytestaffing_test(uint8_t *data,size_t len)
 
 	return memcmp(un_bs.get(),data,len);
 }
-#ifdef WIN32
-void HandleLastError(const char *msg) {
-	DWORD lastError = GetLastError();
-	char *err;
-    DWORD ret = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-			0,
-			lastError,
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // default language
-			(char*)&err,
-			0,
-			NULL);
-		
-	if(!ret) {
-		fprintf(stderr,"FormatMessage(%s,%i): %i (%i)\n",msg,lastError,ret,GetLastError());
-		return;
-	}
 
-	static char buffer[1024];
-	_snprintf_s(buffer, sizeof(buffer), "%s(%i): %s\n", msg,lastError,err);
-    fprintf(stderr,buffer);
-    LocalFree(err);
-}
-
-HANDLE ComOpen(const char *path, uint32_t baud,uint32_t flags)
+IOProvider::~IOProvider() 
 {
-	COMMTIMEOUTS		CommTimeouts;
-	DCB					dcb;
-		
-	wchar_t baud_s[50];
-	wsprintf(baud_s, L"baud=%d parity=N data=8 stop=1",baud);
 
-	// get a handle to the port
-	HANDLE hCom = CreateFileA(path,					// communication port path
-				     GENERIC_READ | GENERIC_WRITE,	// read/write types
-				     0,								// comm devices must be opened with exclusive access
-				     NULL,							// no security attributes
-				     OPEN_EXISTING,					// comm devices must use OPEN_EXISTING
-				     flags,    	                    // flags
-				     0);							// template must be 0 for comm devices
-
-	
-	if (hCom == INVALID_HANDLE_VALUE) {
-		HandleLastError("CreateFile");
-		return hCom;
-	}
-
-	// set the timeout values
-	CommTimeouts.ReadIntervalTimeout			= 1;
-	CommTimeouts.ReadTotalTimeoutMultiplier		= 0;
-	CommTimeouts.ReadTotalTimeoutConstant		= 0;
-	CommTimeouts.WriteTotalTimeoutMultiplier	= 0;
-	CommTimeouts.WriteTotalTimeoutConstant		= 0;
-
-	// configure
-	if (SetCommTimeouts(hCom, &CommTimeouts))
-	{					   
-		if (GetCommState(hCom, &dcb))
-		{
-			dcb.fOutxCtsFlow = FALSE;
-			dcb.fRtsControl = RTS_CONTROL_ENABLE;		// set RTS bit high!
-			if (BuildCommDCB(baud_s, &dcb))
-			{
-				SetCommState(hCom, &dcb);			// normal operation... continue
-			}
-		}
-	}
-
-	return hCom;
 }
-#endif
+
+ProtocolAnswer::ProtocolAnswer(void *_data, size_t _len):result(SUCCESS),data(_data),len(_len) 
+{
+
+}
+
+ProtocolAnswer::ProtocolAnswer(long _result):result(_result),data(0),len(0)
+{
+
+}
+
+Protocol::Protocol():answer_future(answer_promise.get_future())
+{
+
+}	
+
+void Protocol::set_answer(ProtocolAnswer answer)
+{
+	answer_promise.set_value(answer);
+}
+
+ProtocolAnswer Protocol::get_answer()
+{
+	return answer_future.get();
+}
+
+Protocol::~Protocol()
+{
+
+}
 
 IReaderImpl::~IReaderImpl()
 {
@@ -246,7 +213,6 @@ ISaveLoadable::~ISaveLoadable()
 
 #ifdef WIN32
 IReaderImpl* create_blockwise_impl(const char* path,uint32_t baud);
-IReaderImpl* create_bytewise_impl(const char* path,uint32_t baud);
 #endif
 IReaderImpl* create_asio_impl(const char* path,uint32_t baud);
 IReaderImpl* create_asio_mt_impl(const char* path,uint32_t baud);
@@ -256,7 +222,6 @@ static IReaderImpl * get_impl(const char* path, uint32_t baud,const char* impl_t
 {
 	std::string s = std::string(impl_tag);
 #ifdef WIN32
-	if(s == "bytewise") return create_bytewise_impl(path,baud);
 	if(s == "blockwise") return create_blockwise_impl(path,baud);
 #endif
     if(s == "asio-mt") return create_asio_mt_impl(path,baud);

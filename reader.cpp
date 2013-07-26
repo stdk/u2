@@ -24,13 +24,13 @@ API_SIDE_EFFECT(FIELD_ON,reader_field_on)
 API_SIDE_EFFECT(FIELD_OFF,reader_field_off)
 API_SIDE_EFFECT(UPDATE_START,reader_update_start)
 
-#pragma pack(1)
+#pragma pack(push,1)
 struct MPCOMMAND
 {
 	uint16_t shift      :15;
 	uint16_t last_frame :1;
 };
-#pragma pack()
+#pragma pack(pop)
 
 EXPORT long reader_sync(Reader* reader)
 {
@@ -63,18 +63,16 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 		data_len = std::min(end - data,MAX_FRAME_SIZE);
 		package->mp.last_frame = data_len == MAX_FRAME_SIZE ? 0 : 1;
 		
-#ifdef DEBUG
-		int shift = package->mp.shift;
-		int last = package->mp.last_frame;
-		fprintf(stderr,"package_len[%i] shift[%i] last[%i]\n",package_len,shift,last);
-#endif
-
 		package_len = data_len + sizeof(*package);
 		std::copy(data,data+package_len,package->data);
 		
 		size_t packet_len = sizeof(packet);
 		long ret = create_custom_packet(packet,&packet_len,MULTIBYTE_PACKAGE,package,package_len);		
+
 #ifdef DEBUG
+		int shift = package->mp.shift;
+		int last = package->mp.last_frame;
+		fprintf(stderr,"package_len[%i] shift[%i] last[%i]\n",package_len,shift,last);
 		fprintf(stderr,"packet len[%i]\n",packet_len);
 		debug_data("packet",packet,packet_len);
 #endif
