@@ -28,7 +28,7 @@ class FileImpl : public IOProvider, public ISaveLoadable
 
 	CardStorage storage;	
 
-	signals2::signal<long (void *data, size_t len),combiner::maximum<long>> data_received;
+	signals2::signal<long (void *data, size_t len),combiner::maximum<long> > data_received;
 public:
 
 	FileImpl(const char* path,uint32_t baud):storage(path) {
