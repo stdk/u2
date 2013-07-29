@@ -67,12 +67,17 @@ public:
 		uint8_t ret = NO_COMMAND;
 		uint8_t request_buf[256] = {0};
 		size_t request_buf_len = unbytestaff(request_buf,sizeof(request_buf),data,len);
+		
+		PacketHeader* header = (PacketHeader*)request_buf;
+		system::error_code err;
+		if(request_buf_len < header->full_size()) {
+			err.assign(system::errc::protocol_error,system::generic_category());
+		}
 
-		callback(len,system::error_code());
+		if(callback(len,err) != 0) return;
 
 		uint8_t data_buf[256] = {0};
 		size_t data_buf_len = sizeof(data_buf);
-		PacketHeader* header = (PacketHeader*)request_buf;
 		if(header->crc_check()) {
 			HandlerMap::const_iterator handler = handlers.find(header->code);
 			if(handler != handlers.end()) {
