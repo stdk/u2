@@ -4,6 +4,7 @@
 #include <boost/cstdint.hpp>
 #include <boost/thread/future.hpp>
 #include <boost/function.hpp>
+#include <boost/system/error_code.hpp>
 using namespace boost;
 
 #define ERR_MASK                0xFF0000FF

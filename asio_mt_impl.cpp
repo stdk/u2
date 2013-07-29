@@ -42,7 +42,7 @@ class AsioMTImpl : public IReaderImpl, public IOProvider
 	// Using maximum combiner assures that if more than one listener will be active
 	// on this signal, we should always get maximum of their return values.
 	// As a result, we will correctly stop io_service when at least one listener got what it wanted.
-	signals2::signal<long (void *data, size_t len),combiner::maximum<long>> data_received;
+	signals2::signal<long (void *data, size_t len),combiner::maximum<long> > data_received;
 
 	// read_callback - passed information about bytes in read_buf to handle_by_protocol method.	
 	void read_callback(size_t bytes_transferred,const system::error_code& error)
