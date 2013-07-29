@@ -92,7 +92,17 @@ struct Packet
 };
 #pragma pack(pop)
 
-long create_custom_packet(void* packet,size_t *packet_len,uint8_t code,void *data,uint8_t len);
+// Parameters:
+// void* packet - buffer for packet being constructed
+// size_t max_packet_len - Length of packet buffer. Maximal possible length of constructed packet.
+// uint8_t code - code of packet being constructed
+// void *data - payload of packet being constructed
+// uint8_t len - length of data buffer
+//
+// Return value:
+// -1 when there is not enough space in given buffer for complete packet;
+// length of successfully constructed packet otherwise
+long create_custom_packet(void* packet,size_t max_packet_len,uint8_t code,void *data,uint8_t len);
 
 #pragma pack(push,1)
 struct EmptyPacket
@@ -106,14 +116,6 @@ struct EmptyPacket
 	uint16_t crc;
 };
 #pragma pack(pop)
-
-class IReaderImpl
-{
-public:
-	virtual ~IReaderImpl();
-	//virtual long ctl(uint32_t options,void* arg,size_t len);
-	virtual long transceive(void* data,size_t len,void* packet,size_t packet_len) = 0;
-};
 
 class IOProvider
 {
@@ -182,7 +184,7 @@ public:
 
 class Reader
 {
-	IReaderImpl *impl;
+	IOProvider *impl;
 public:
 	Reader(const char* path, uint32_t baud,const char* impl_tag);
 	~Reader();
@@ -203,7 +205,7 @@ public:
 		return send_command(code,(uint8_t*)0);
 	}
 
-	long send_command(void* packet,size_t packet_len,void* answer,size_t answer_len);
+	long send_command(void* data,size_t len,void* answer,size_t answer_len);
 
 	long save(const char* path);
 	long load(const char* path);

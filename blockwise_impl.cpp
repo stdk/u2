@@ -1,5 +1,4 @@
 #include "protocol.h"
-#include "subway_protocol.h"
 #include "custom_combiners.h"
 
 #include <boost/thread.hpp>
@@ -132,7 +131,7 @@ public:
 	}
 };
 
-class BlockwiseImpl : public IReaderImpl, public IOProvider
+class BlockwiseImpl : public IOProvider
 {
 	thread io_thread;
 
@@ -153,6 +152,7 @@ class BlockwiseImpl : public IReaderImpl, public IOProvider
 	HANDLE hIOCP;
 
 	uint8_t read_buf[512];
+	size_t read_size;
 
 	// Using maximum combiner assures that if more than one listener will be active
 	// on this signal, we should always get maximum of their return values.
@@ -162,7 +162,7 @@ class BlockwiseImpl : public IReaderImpl, public IOProvider
 
 	Timeout timeout;
 public:
-	BlockwiseImpl(const char* path,uint32_t baud):read_over(OP_READ),write_over(OP_WRITE) {
+	BlockwiseImpl(const char* path,uint32_t baud):read_over(OP_READ),write_over(OP_WRITE),read_size(1) {
 		uint32_t flags = FILE_FLAG_OVERLAPPED;
 		hCom = ComOpen(path, baud, flags);
 		if(INVALID_HANDLE_VALUE == hCom) throw -1;
@@ -173,8 +173,7 @@ public:
 			throw -2;
 		};
 	
-		io_thread = thread(bind(&BlockwiseImpl::iocp_thread,this));
-		
+		io_thread = thread(bind(&BlockwiseImpl::iocp_thread,this));		
 	}
 
 	void stop_iocp_thread()
@@ -229,14 +228,14 @@ public:
 				if(completed) {
 					long packet_found = data_received(read_buf,bytes_transferred);
 					if(!packet_found) {
-						Read(read_buf,sizeof(read_buf));
+						Read(read_buf,1);
 					}				
 				}
 			}
 
 			if(over->operation == OP_WRITE) {
 				if(data_sent(bytes_transferred,system::error_code(last_error,system::system_category())) == 0) {
-					Read(read_buf,sizeof(read_buf));
+					Read(read_buf,1);
 				}
 			}						
 		}
@@ -308,28 +307,15 @@ public:
 		return 0;
 	}
 
-	long cancel_timeout()
+	virtual long cancel_timeout()
 	{
 		if(log_level) std::cerr << "BlockwiseImpl::cancel_timeout" << std::endl;
 		timeout.cancel();
 		return 0;
 	}
-
-	virtual long transceive(void* data,size_t len,void* packet,size_t packet_len) {
-		SubwayProtocol protocol(this);
-	
-		protocol.send(data,len);
-		
-		ProtocolAnswer answer = protocol.get_answer();
-		if(answer.result) return answer.result;
-		if(answer.len > packet_len) return ANSWER_TOO_LONG;
-		memcpy(packet,answer.data, std::min(answer.len,packet_len));
-
-		return 0;	
-	}
 };
 
-IReaderImpl* create_blockwise_impl(const char* path,uint32_t baud)
+IOProvider* create_blockwise_impl(const char* path,uint32_t baud)
 {
 	return new BlockwiseImpl(path,baud);
 }

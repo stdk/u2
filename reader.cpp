@@ -66,8 +66,7 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 		package_len = data_len + sizeof(*package);
 		std::copy(data,data+package_len,package->data);
 		
-		size_t packet_len = sizeof(packet);
-		long ret = create_custom_packet(packet,&packet_len,MULTIBYTE_PACKAGE,package,package_len);		
+		size_t packet_len = create_custom_packet(packet,sizeof(packet),MULTIBYTE_PACKAGE,package,package_len);		
 
 #ifdef DEBUG
 		int shift = package->mp.shift;
@@ -76,12 +75,12 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 		fprintf(stderr,"packet len[%i]\n",packet_len);
 		debug_data("packet",packet,packet_len);
 #endif
-		if(ret) {
+		if(packet_len == -1) {
 			std::cerr << "not enough space for custom packet" << std::endl;
 			return -2;
 		}
 		
-		ret = reader->send_command(packet,packet_len,0,0);
+		long ret = reader->send_command(packet,packet_len,0,0);
 		if(ret) return ret;
 
 		data += data_len;

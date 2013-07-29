@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "subway_protocol.h"
 #include "api_internal.h"
 #include "crc16.h"
 
@@ -76,16 +77,15 @@ uint16_t prepare_packet(uint8_t code,void *packet,size_t packet_len)
 	return (CRC16_High << 8) + CRC16_Low;
 }
 
-long create_custom_packet(void *packet,size_t *packet_len,uint8_t code,void *data,uint8_t len)
+long create_custom_packet(void *packet,size_t max_packet_len,uint8_t code,void *data,uint8_t len)
 {
-	if(*packet_len < sizeof(PacketHeader)) return -1;
+	if(max_packet_len < sizeof(PacketHeader)) return -1;
 
-	size_t max_packet_len = *packet_len; //save initial value for comparison
 	PacketHeader *header = (PacketHeader*)packet;
 	header->len = len;
 	
-	*packet_len = header->full_size();
-	if(max_packet_len < *packet_len) return -1;
+	size_t packet_len = header->full_size();
+	if(max_packet_len < packet_len) return -1;
 
 	struct CustomPacket {
 		PacketHeader header;
@@ -93,9 +93,9 @@ long create_custom_packet(void *packet,size_t *packet_len,uint8_t code,void *dat
 	} *custom_packet = (CustomPacket*)packet;
 
 	memcpy(custom_packet->contents,data,len);
-	prepare_packet(code,packet,*packet_len);	
+	prepare_packet(code,packet,packet_len);	
 
-	return 0;
+	return packet_len;
 }
 
 size_t unbytestaff(void *dst_buf,size_t dst_len,void *src_buf,size_t src_len, bool wait_for_fbgn)
@@ -201,24 +201,19 @@ Protocol::~Protocol()
 
 }
 
-IReaderImpl::~IReaderImpl()
-{
-
-}
-
 ISaveLoadable::~ISaveLoadable()
 {
 
 }
 
 #ifdef WIN32
-IReaderImpl* create_blockwise_impl(const char* path,uint32_t baud);
+IOProvider* create_blockwise_impl(const char* path,uint32_t baud);
 #endif
-IReaderImpl* create_asio_impl(const char* path,uint32_t baud);
-IReaderImpl* create_asio_mt_impl(const char* path,uint32_t baud);
-IReaderImpl* create_file_impl(const char* path,uint32_t baud);
+IOProvider* create_asio_impl(const char* path,uint32_t baud);
+IOProvider* create_asio_mt_impl(const char* path,uint32_t baud);
+IOProvider* create_file_impl(const char* path,uint32_t baud);
 
-static IReaderImpl * get_impl(const char* path, uint32_t baud,const char* impl_tag)
+static IOProvider * get_impl(const char* path, uint32_t baud,const char* impl_tag)
 {
 	std::string s = std::string(impl_tag);
 #ifdef WIN32
@@ -242,24 +237,27 @@ Reader::~Reader()
 	delete impl;
 }
 
-long Reader::send_command(void *packet,size_t packet_len,void *answer,size_t answer_len)
+long Reader::send_command(void *data,size_t len,void *answer,size_t answer_len)
 {
 	if(!impl) return NO_IMPL;
 
-	uint8_t packet_buf[512] = {0};
-	long ret = impl->transceive(packet,packet_len,packet_buf,sizeof(packet_buf));
-	if(ret) return ret;
-
-	PacketHeader *header = (PacketHeader*)packet_buf;
-
-    if(!header->crc_check()) return PACKET_CRC_ERROR;
+	SubwayProtocol protocol(impl);
+	
+	protocol.send(data,len);
+		
+	ProtocolAnswer protocol_answer = protocol.get_answer();
+	if(protocol_answer.result) return protocol_answer.result;
+		
+	PacketHeader *header = (PacketHeader*)protocol_answer.data;
+		
+	if(!header->crc_check()) return PACKET_CRC_ERROR;
 	if(header->code == NACK_BYTE) return header->nack_data();
 
 	if(answer) header->get_data(answer,answer_len);
-	if(header-> len != answer_len) {
+	if(header->len != answer_len) {
 		uint16_t payload = (header->len << 8) + answer_len;
 		return PACKET_DATA_LEN_ERROR | (payload << 8);
 	}
 
-	return 0;	
+	return 0;	    
 }

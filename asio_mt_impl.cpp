@@ -1,5 +1,4 @@
 #include "protocol.h"
-#include "subway_protocol.h"
 #include "custom_combiners.h"
 
 #include <iostream>
@@ -26,7 +25,7 @@ using namespace boost;
 
 static const int log_level = 0;
 
-class AsioMTImpl : public IReaderImpl, public IOProvider
+class AsioMTImpl : public IOProvider
 {
 	asio::io_service io_svc;
 	asio::serial_port serial;
@@ -36,7 +35,7 @@ class AsioMTImpl : public IReaderImpl, public IOProvider
 	thread io_thread;
 
 	unsigned char read_buf[512];
-
+	size_t read_size;
 	
 
 	// Using maximum combiner assures that if more than one listener will be active
@@ -87,7 +86,7 @@ class AsioMTImpl : public IReaderImpl, public IOProvider
 		// to make io_svc.run return we should cancel all pending operations on serial port    
 		
 #ifdef WIN32
-		// workaround: serial.cancel() terminates the runtime here but CancelIo works perfectly
+		// workaround: serial.cancel() terminates the runtime on Windows but CancelIo works properly
 		CancelIo(serial.native_handle());
 #else
 		serial.cancel();
@@ -103,16 +102,13 @@ class AsioMTImpl : public IReaderImpl, public IOProvider
 	inline void initiate_read() {
 		namespace ph = boost::asio::placeholders;
 		 
-		asio::async_read(this->serial,asio::buffer(read_buf,1),
-			bind(&AsioMTImpl::read_callback,this,ph::bytes_transferred,ph::error));
-
-		/*asio::async_read(this->serial,asio::buffer(read_buf),
+		asio::async_read(this->serial,asio::buffer(read_buf,read_size),
 			bind(&AsioMTImpl::check_callback,this,ph::bytes_transferred,ph::error),
-			bind(&AsioMTImpl::read_callback,this,ph::bytes_transferred,ph::error));*/
+			bind(&AsioMTImpl::read_callback,this,ph::bytes_transferred,ph::error));
 	}
 
 public:
-	AsioMTImpl(const char *path,uint32_t baud):serial(io_svc),work(io_svc),timeout(io_svc) {
+	AsioMTImpl(const char *path,uint32_t baud):serial(io_svc),work(io_svc),timeout(io_svc),read_size(1) {
 		
 		serial.open( path );
 
@@ -143,7 +139,6 @@ public:
 	virtual void send(void *data, size_t len, IOProvider::send_callback callback);
 	virtual long set_timeout(size_t timeout, IOProvider::timeout_callback callback);
 	virtual long cancel_timeout();
-	virtual long transceive(void *data, size_t len, void *packet, size_t packet_len);
 };
 
 static void disconnector(signals2::connection c)
@@ -189,21 +184,7 @@ long AsioMTImpl::cancel_timeout()
 	return 0;
 }
 
-long AsioMTImpl::transceive(void* data,size_t len,void* packet,size_t packet_len)
-{
-	SubwayProtocol protocol(this);
-	
-	protocol.send(data,len);
-		
-	ProtocolAnswer answer = protocol.get_answer();
-	if(answer.result) return answer.result;
-	if(answer.len > packet_len) return ANSWER_TOO_LONG;
-	memcpy(packet,answer.data, std::min(answer.len,packet_len));
-
-	return 0;	
-}
-
-IReaderImpl* create_asio_mt_impl(const char* path,uint32_t baud)
+IOProvider* create_asio_mt_impl(const char* path,uint32_t baud)
 {
 	return new AsioMTImpl(path,baud);
 }

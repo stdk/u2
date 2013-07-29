@@ -4,28 +4,34 @@
 
 #include <cstring>
 #include <cstdlib>
+#include <boost/signals2.hpp>
 
 #include "protocol.h"
 #include "card_storage.h"
 #include "commands.h"
 #include "api_common.h"
+#include "custom_combiners.h"
 
 #define CARD_TYPE_STANDARD   0x4
 #define CARD_TYPE_ULTRALIGHT 0x44
 
 using namespace std;
+using namespace boost;
 
-class FileImpl : public IReaderImpl, public ISaveLoadable
+const int log_level = 0;
+
+class FileImpl : public IOProvider, public ISaveLoadable
 {
 	typedef uint8_t (FileImpl::*command_handler)(void* in,size_t in_len,void* out,size_t *out_len);
 	typedef map<uint8_t,command_handler> HandlerMap;
 	HandlerMap handlers;
 
 	CardStorage storage;	
+
+	signals2::signal<long (void *data, size_t len),combiner::maximum<long>> data_received;
 public:
 
 	FileImpl(const char* path,uint32_t baud):storage(path) {
-		//fprintf(stderr,"FileImpl\n");
 
 		handlers[GET_SN]          = &FileImpl::get_sn;
 		handlers[GET_VERSION]     = &FileImpl::get_version;
@@ -56,12 +62,17 @@ public:
 		return storage.save(path);
 	}
 
-	long transceive(void* data,size_t len,void* packet,size_t packet_len) {
+	virtual void send(void *data, size_t len, IOProvider::send_callback callback) 
+	{
 		uint8_t ret = NO_COMMAND;
-		uint8_t data_buf[128] = {0};
-		size_t data_buf_len = sizeof(data_buf);
+		uint8_t request_buf[256] = {0};
+		size_t request_buf_len = unbytestaff(request_buf,sizeof(request_buf),data,len);
 
-		PacketHeader* header = (PacketHeader*)data;
+		callback(len,system::error_code());
+
+		uint8_t data_buf[256] = {0};
+		size_t data_buf_len = sizeof(data_buf);
+		PacketHeader* header = (PacketHeader*)request_buf;
 		if(header->crc_check()) {
 			HandlerMap::const_iterator handler = handlers.find(header->code);
 			if(handler != handlers.end()) {
@@ -70,9 +81,46 @@ public:
 		} else {
 			ret = CRC_ERROR;
 		}
+		
+		uint8_t packet[256] = {0};
+		size_t packet_len = 0;
+		if(ret) {
+			packet_len = create_custom_packet(packet,sizeof(packet),NACK_BYTE,&ret,sizeof(ret));
+		} else {
+			packet_len = create_custom_packet(packet,sizeof(packet),header->code,data_buf,data_buf_len);
+		}
 
-		if(ret)	return create_custom_packet(packet,&packet_len,NACK_BYTE,&ret,sizeof(ret));
-		return create_custom_packet(packet,&packet_len,header->code,data_buf,data_buf_len);		
+		uint8_t response[512] = {0};
+		size_t response_len = bytestaff(response,sizeof(response),packet,packet_len);
+
+		data_received(response,response_len);
+	}
+
+	static void disconnector(signals2::connection c)
+	{
+		if(log_level) std::cerr << "FileImpl::disconnector" << std::endl;
+
+		c.disconnect();
+	}
+
+	function<void ()> listen(IOProvider::listen_callback callback)
+	{
+		if(log_level) std::cerr << "FileImpl::listen" << std::endl;
+
+		signals2::connection c = data_received.connect(callback);
+		return bind(disconnector,c);
+	}
+
+	virtual long set_timeout(size_t time, function<void ()> callback)
+	{
+		if(log_level) std::cerr << "FileImpl::set_timeout" << std::endl;
+		return 0;
+	}
+
+	virtual long cancel_timeout()
+	{
+		if(log_level) std::cerr << "FileImpl::cancel_timeout" << std::endl;
+		return 0;
 	}
 
 	template<typename T>
@@ -243,7 +291,7 @@ public:
 	}
 };
 
-IReaderImpl* create_file_impl(const char* path,uint32_t baud)
+IOProvider* create_file_impl(const char* path,uint32_t baud)
 {
 	return new FileImpl(path,baud);
 }
