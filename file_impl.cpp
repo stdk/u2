@@ -175,7 +175,7 @@ public:
 	}	
 
 	void clear_card_auth() {
-		for(int i = 0;i < sizeof(storage.sectors)/sizeof(SectorStorage); i++) {
+		for(size_t i = 0;i < sizeof(storage.sectors)/sizeof(SectorStorage); i++) {
 			storage.sectors[i].status = SectorStorage::NO_AUTH;
 		}
 	}
