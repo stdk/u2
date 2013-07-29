@@ -87,10 +87,13 @@ long create_custom_packet(void *packet,size_t max_packet_len,uint8_t code,void *
 	size_t packet_len = header->full_size();
 	if(max_packet_len < packet_len) return -1;
 
+#pragma warning( push )
+#pragma warning( disable : 4200 )
 	struct CustomPacket {
 		PacketHeader header;
 		uint8_t contents[0];
 	} *custom_packet = (CustomPacket*)packet;
+#pragma warning( pop )
 
 	memcpy(custom_packet->contents,data,len);
 	prepare_packet(code,packet,packet_len);	
@@ -163,7 +166,7 @@ EXPORT long bytestaffing_test(uint8_t *data,size_t len)
 	size_t un_bs_len = unbytestaff(un_bs.get(),len,bs.get(),bs_len,false);
 	//debug_data("data_un",un_bs.get(),un_bs_len);
 
-	return memcmp(un_bs.get(),data,len);
+	return un_bs_len == len ? memcmp(un_bs.get(),data,len) : -1;
 }
 
 IOProvider::~IOProvider() 

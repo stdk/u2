@@ -48,11 +48,14 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 
 	uint8_t packet[PACKET_BUFFER] = {0};
 	uint8_t data_buf[sizeof(MPCOMMAND) + MAX_FRAME_SIZE] = {0};
+#pragma warning( push )
+#pragma warning( disable : 4200 )
 	struct mp_package
 	{
 		MPCOMMAND mp;
 		uint8_t data[0];
 	} *package = (mp_package*)data_buf;
+#pragma warning( pop )
 	
 	uint8_t data_len = 0;
 	uint8_t package_len = 0;
