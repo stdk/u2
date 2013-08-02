@@ -71,7 +71,7 @@ static HANDLE ComOpen(const char *path, uint32_t baud,uint32_t flags)
 	}
 
 	// set the timeout values
-	CommTimeouts.ReadIntervalTimeout			= 1;
+	CommTimeouts.ReadIntervalTimeout			= INFINITE;
 	CommTimeouts.ReadTotalTimeoutMultiplier		= 0;
 	CommTimeouts.ReadTotalTimeoutConstant		= 0;
 	CommTimeouts.WriteTotalTimeoutMultiplier	= 0;
@@ -80,15 +80,19 @@ static HANDLE ComOpen(const char *path, uint32_t baud,uint32_t flags)
 	// configure
 	if (SetCommTimeouts(hCom, &CommTimeouts))
 	{					   
-		if (GetCommState(hCom, &dcb))
-		{
-			dcb.fOutxCtsFlow = FALSE;
-			dcb.fRtsControl = RTS_CONTROL_ENABLE;		// set RTS bit high!
+		//if (GetCommState(hCom, &dcb))
+		//{
+			//dcb.fOutxCtsFlow = FALSE;
+			
+			//dcb.fRtsControl = RTS_CONTROL_ENABLE;
+			
 			if (BuildCommDCB(baud_s, &dcb))
 			{
+				
+				
 				SetCommState(hCom, &dcb);			// normal operation... continue
 			}
-		}
+		//}
 	}
 
 	return hCom;

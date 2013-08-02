@@ -240,6 +240,15 @@ Reader::~Reader()
 	delete impl;
 }
 
+long Reader::send_command(uint8_t code,void *data, size_t len,void *answer, size_t answer_len)
+{
+	uint8_t packet[512] = {0};
+	long packet_len = create_custom_packet(packet,sizeof(packet),code,data,len);
+	if(packet_len == -1) return -1;
+
+	return send_command(packet,packet_len,answer,answer_len);
+}
+
 long Reader::send_command(void *data,size_t len,void *answer,size_t answer_len)
 {
 	if(!impl) return NO_IMPL;

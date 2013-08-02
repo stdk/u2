@@ -46,7 +46,6 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
     fprintf(stderr,"reader_send_package len[%i]\n",len);
 #endif
 
-	uint8_t packet[PACKET_BUFFER] = {0};
 	uint8_t data_buf[sizeof(MPCOMMAND) + MAX_FRAME_SIZE] = {0};
 #pragma warning( push )
 #pragma warning( disable : 4200 )
@@ -69,8 +68,6 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 		package_len = data_len + sizeof(*package);
 		std::copy(data,data+package_len,package->data);
 		
-		size_t packet_len = create_custom_packet(packet,sizeof(packet),MULTIBYTE_PACKAGE,package,package_len);		
-
 #ifdef DEBUG
 		int shift = package->mp.shift;
 		int last = package->mp.last_frame;
@@ -78,12 +75,9 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 		fprintf(stderr,"packet len[%i]\n",packet_len);
 		debug_data("packet",packet,packet_len);
 #endif
-		if(packet_len == -1) {
-			std::cerr << "not enough space for custom packet" << std::endl;
-			return -2;
-		}
 		
-		long ret = reader->send_command(packet,packet_len,0,0);
+		long ret = reader->send_command(MULTIBYTE_PACKAGE,package,package_len,0,0);
+		
 		if(ret) return ret;
 
 		data += data_len;

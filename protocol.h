@@ -201,11 +201,13 @@ public:
 		return send_command(&packet,sizeof(packet),answer,answer ? size : 0);
 	}
 
+	long send_command(uint8_t code,void *data, size_t len,void *answer, size_t answer_len);	
+
 	inline long send_command(uint8_t code) {
 		return send_command(code,(uint8_t*)0);
 	}
 
-	long send_command(void* data,size_t len,void* answer,size_t answer_len);
+	long send_command(void* data,size_t len,void *answer,size_t answer_len);
 
 	long save(const char* path);
 	long load(const char* path);
