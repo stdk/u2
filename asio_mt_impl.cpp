@@ -21,6 +21,12 @@
 #include <windows.h>
 #endif
 
+#ifdef WIN32
+#define READ_SIZE(buffer) 1
+#else
+#define READ_SIZE(buffer) sizeof(buffer)
+#endif
+
 using namespace boost;
 
 static const int log_level = 0;
@@ -108,7 +114,7 @@ class AsioMTImpl : public IOProvider
 	}
 
 public:
-	AsioMTImpl(const char *path,uint32_t baud):serial(io_svc),work(io_svc),timeout(io_svc),read_size(1) {
+	AsioMTImpl(const char *path,uint32_t baud):serial(io_svc),work(io_svc),timeout(io_svc),read_size(READ_SIZE(read_buf)) {
 		
 		serial.open( path );
 
