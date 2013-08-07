@@ -48,7 +48,7 @@ class AsioMTImpl : public IOProvider
 	{
 		if (error || !bytes_transferred)
 		{
-			std::cerr << "read callback error:" << error << ": " << error.message() << std::endl;
+			if(log_level) std::cerr << "read callback error:" << error << ": " << error.message() << std::endl;
 			return;
 		}
 
