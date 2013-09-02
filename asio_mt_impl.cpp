@@ -132,7 +132,7 @@ public:
 
 	void io_service_thread() {
 		io_svc.run();
-		std::cerr << "io_svc stopped" << std::endl;
+		if(log_level) std::cerr << "io_svc stopped" << std::endl;
 		serial.close(); //serial port should be closed from the same thread as io service
 	}
 

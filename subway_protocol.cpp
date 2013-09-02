@@ -84,6 +84,9 @@ long SubwayProtocol::write_callback(size_t bytes_sent_to_transfer, size_t bytes_
 
 void SubwayProtocol::send(void *data, size_t len) {
 	size_t write_buf_len = bytestaff(write_buf,sizeof(write_buf),data,len);
+
+	if(log_level) debug_data("send",write_buf,write_buf_len);
+
 	provider->send(write_buf,write_buf_len,
 		bind(&SubwayProtocol::write_callback,this,write_buf_len,_1,_2));
 }
