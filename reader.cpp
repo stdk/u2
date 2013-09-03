@@ -94,7 +94,7 @@ EXPORT long reader_open(const char *path,uint32_t baud,const char* impl,Reader *
 		return 0;
 	} catch(boost::system::system_error& e) {
 		std::cerr << e.what() << std::endl;
-		return -1;		
+		return -1;
 	} catch(int& e) {
 		return e;
 	}

@@ -15,7 +15,6 @@
 #define CARD_TYPE_STANDARD   0x4
 #define CARD_TYPE_ULTRALIGHT 0x44
 
-using namespace std;
 using namespace boost;
 
 const int log_level = 0;
@@ -23,7 +22,7 @@ const int log_level = 0;
 class FileImpl : public IOProvider, public ISaveLoadable
 {
 	typedef uint8_t (FileImpl::*command_handler)(void* in,size_t in_len,void* out,size_t *out_len);
-	typedef map<uint8_t,command_handler> HandlerMap;
+	typedef std::map<uint8_t,command_handler> HandlerMap;
 	HandlerMap handlers;
 
 	CardStorage storage;	
@@ -137,14 +136,14 @@ public:
 
 	uint8_t get_sn(void* in,size_t in_len,void* out,size_t *out_len) {
 		static const uint8_t sn[8] = {1,2,3,4,5,6,7,8};
-		*out_len = min(*out_len,sizeof(sn));
+		*out_len = std::min(*out_len,sizeof(sn));
 		memcpy(out,sn,*out_len);
 		return 0;
 	}
 
 	uint8_t get_version(void* in,size_t in_len,void* out,size_t *out_len) {
 		static const char version[7] = "F01";
-		*out_len = min(*out_len,sizeof(version));
+		*out_len = std::min(*out_len,sizeof(version));
 		memcpy(out,version,*out_len);
 		return 0;
 	}
@@ -169,7 +168,7 @@ public:
 		uint8_t answer[2 + sn_len] = {0, sn_len };
 		memcpy(&answer[2],&storage.sn,sn_len);
 		
-		*out_len = min(*out_len,sizeof(answer));
+		*out_len = std::min(*out_len,sizeof(answer));
 		memcpy(out,answer,*out_len);
 		return 0;
 	}	

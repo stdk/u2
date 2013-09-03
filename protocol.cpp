@@ -210,17 +210,21 @@ ISaveLoadable::~ISaveLoadable()
 }
 
 #ifdef WIN32
-IOProvider* create_blockwise_impl(const char* path,uint32_t baud);
+IOProvider* create_blockwise_impl(const char *path,uint32_t baud);
+#else
+IOProvider* create_cp210x_impl(const char *path,uint32_t baud);
 #endif
-IOProvider* create_asio_impl(const char* path,uint32_t baud);
-IOProvider* create_asio_mt_impl(const char* path,uint32_t baud);
-IOProvider* create_file_impl(const char* path,uint32_t baud);
+IOProvider* create_asio_impl(const char *path,uint32_t baud);
+IOProvider* create_asio_mt_impl(const char *path,uint32_t baud);
+IOProvider* create_file_impl(const char *path,uint32_t baud);
 
-static IOProvider * get_impl(const char* path, uint32_t baud,const char* impl_tag)
+static IOProvider * get_impl(const char *path, uint32_t baud,const char *impl_tag)
 {
 	std::string s = std::string(impl_tag);
 #ifdef WIN32
 	if(s == "blockwise") return create_blockwise_impl(path,baud);
+#else
+	if(s == "cp210x") return create_cp210x_impl(path,baud);
 #endif
     if(s == "asio-mt") return create_asio_mt_impl(path,baud);
 	if(s == "asio") return create_asio_impl(path,baud);
@@ -230,7 +234,7 @@ static IOProvider * get_impl(const char* path, uint32_t baud,const char* impl_ta
 	return 0;
 }
 
-Reader::Reader(const char* path,uint32_t baud,const char* impl_tag):impl(0)
+Reader::Reader(const char *path,uint32_t baud,const char *impl_tag):impl(0)
 {
 	impl = get_impl(path,baud,impl_tag);
 }
@@ -251,7 +255,10 @@ long Reader::send_command(uint8_t code,void *data, size_t len,void *answer, size
 
 long Reader::send_command(void *data,size_t len,void *answer,size_t answer_len)
 {
-	if(!impl) return NO_IMPL;
+	if(!impl) {
+		fprintf(stderr,"NO_IMPL\n");
+		return NO_IMPL;	
+	}
 
 	SubwayProtocol protocol(impl);
 	
