@@ -22,11 +22,11 @@ using namespace std;
 void debug_data(const char* header,void* data,size_t len)
 {
 	uint8_t *bytes = (uint8_t*)data;
-	std::cerr << header << ": ";
+	fprintf(stderr,"%s: ",header);
 	for(size_t i=0;i<len;i++) {
-		std::cerr << std::hex << setw(2) <<(unsigned int)bytes[i] << " ";
+		fprintf(stderr,"%02hhX ",bytes[i]);
 	}
-	std::cerr << std::endl;
+	fprintf(stderr,"\n");
 }
 
 size_t PacketHeader::full_size()
@@ -86,14 +86,17 @@ long create_custom_packet(void *packet,size_t max_packet_len,uint8_t code,void *
 	
 	size_t packet_len = header->full_size();
 	if(max_packet_len < packet_len) return -1;
-
+#ifdef WIN32
 #pragma warning( push )
 #pragma warning( disable : 4200 )
+#endif
 	struct CustomPacket {
 		PacketHeader header;
 		uint8_t contents[0];
 	} *custom_packet = (CustomPacket*)packet;
+#ifdef WIN32
 #pragma warning( pop )
+#endif
 
 	memcpy(custom_packet->contents,data,len);
 	prepare_packet(code,packet,packet_len);	

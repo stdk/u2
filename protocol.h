@@ -124,6 +124,12 @@ public:
 	//  0 -> everything is ok, IOProvider should initiate reading after that;
 	// -1 -> write failed, IOProvider should not initiate reading.
 	typedef function<long (size_t bytes_transferred, const system::error_code&)> send_callback;
+	
+	// listen callback notifies user about data that came from IOProvider.
+	// IOProvider may possibly interpret return value of this callback
+	// a basis for its next actions: 
+	// 0 -> IOProvider should continue reading;
+	// 1 -> user has fulfilled its task, no more reading required.
     typedef function<long (void *data, size_t len)> listen_callback;
 	typedef function<void ()> timeout_callback;
 
