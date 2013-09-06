@@ -5,7 +5,7 @@
 using namespace boost;
 
 static const size_t TIMEOUT = 1500;
-static const int log_level = 0;
+static const int log_level = getenv("DEBUG_SUBWAY_PROTOCOL") != 0;
 
 Unbytestaffer::Unbytestaffer() {
 	reset();
