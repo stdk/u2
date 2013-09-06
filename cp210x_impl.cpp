@@ -19,12 +19,13 @@
 #include <boost/throw_exception.hpp>
 
 #include <time.h>
+#include <stdlib.h>
 
 #include <cp210x.h>
 
 using namespace boost;
 
-static const int log_level = 0;
+static const int log_level = getenv("DEBUG_CP210X_IMPL") != 0;
 
 class Timeout
 {
@@ -70,8 +71,7 @@ public:
 	}
 
 	uint64_t time_left() const {
-		uint64_t leftover = final - get_tick_count();
-		return leftover > 0 ? leftover : 0;
+		return final > get_tick_count() ? final - get_tick_count() : 0;
 	}
 };
 
@@ -98,8 +98,6 @@ public:
 		
 	}
 	
-	void data_sent(signals2::connection c, int status, size_t len, IOProvider::send_callback callback);
-
 	virtual function<void ()> listen(IOProvider::listen_callback callback);
 	virtual void send(void *data, size_t len, IOProvider::send_callback callback);
 	virtual long set_timeout(size_t timeout, IOProvider::timeout_callback callback);
@@ -117,25 +115,32 @@ function<void ()> CP210XImpl::listen(IOProvider::listen_callback callback)
 {
 	if(log_level) std::cerr << "listen" << std::endl;
 
-	signals2::connection c = device.data_received.connect([this,callback](int status, void *data, size_t len) {
+	signals2::connection c = device.data_received.connect([this,callback](int status,
+	                                                                      void *data,
+																		  size_t len) {
 		if(!this->timeout.check()) {
-			callback(data,len);
+			if(!callback(data,len)) {
+				this->device.recv_async();
+			}
 		}
 	});
 	return bind(disconnector,c);
 }
 
-void CP210XImpl::data_sent(signals2::connection c, int status, size_t len, IOProvider::send_callback callback) {
-	if(log_level) std::cerr << "CP210XImpl::data_sent" << std::endl;
-	
-	c.disconnect();
-	
-	callback(len,system::error_code(status ? EIO : 0,system::system_category()));
-}
-
 void CP210XImpl::send(void *data, size_t len,IOProvider::send_callback callback) 
 {
-	device.data_sent.connect_extended(bind(&CP210XImpl::data_sent,this,_1,_2,_3,callback));
+	device.data_sent.connect_extended([this,callback](signals2::connection c,
+	                                              int status,
+												  size_t len) {
+		if(log_level) std::cerr << "CP210XImpl::data_sent" << std::endl;
+		
+		c.disconnect();
+				
+		if(!callback(len,system::error_code(status ? EIO : 0,system::system_category()))) {
+			this->device.recv_async();
+		}
+	});
+	
 	int ret = device.send_async(data,len);
 	if(ret) {
 		callback(0,system::error_code(errno,system::system_category()));
