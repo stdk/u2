@@ -79,10 +79,6 @@ class AsioMTImpl : public IOProvider
 		}
 	}
 
-	static void canceller(asio::serial_port &s) {
-		s.cancel();
-	}
-
 	void wait_callback(function<void ()> callback, const system::error_code& error)
 	{
 		if (error) return;   // Data has been read and this timeout was canceled
