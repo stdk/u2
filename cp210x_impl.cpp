@@ -86,16 +86,16 @@ class CP210XImpl : public IOProvider
 public:
 	CP210XImpl(const char *path,uint32_t baud):ctx(3),device(ctx) {
 		if(!device) {
-			throw_exception(system::system_error(system::error_code(ENODEV,system::system_category())));
+			throw_exception(system::system_error(system::error_code(ENODEV,
+			                                     system::system_category())));
 		}
 			
-		device.set_baud(38400);
-		device.set_ctl(cp210x::data8 | cp210x::parity_none | cp210x::stop1);
-		
+		device.set_baud(baud);
+		device.set_ctl(cp210x::data8 | cp210x::parity_none | cp210x::stop1);		
 	}	
 
 	virtual ~CP210XImpl() {
-		
+		if(log_level) std::cerr << "~CP210XImpl" << std::endl;
 	}
 	
 	virtual function<void ()> listen(IOProvider::listen_callback callback);
@@ -115,37 +115,32 @@ function<void ()> CP210XImpl::listen(IOProvider::listen_callback callback)
 {
 	if(log_level) std::cerr << "listen" << std::endl;
 
-	signals2::connection c = device.data_received.connect([this,callback](int status,
-	                                                                      void *data,
-																		  size_t len) {
+	auto recv_handler = [=](int status, void *data, size_t len) {
 		if(!this->timeout.check()) {
 			if(!callback(data,len)) {
 				this->device.recv_async();
 			}
 		}
-	});
+	};
+
+	auto c = device.data_received.connect(recv_handler);
+	
 	return bind(disconnector,c);
 }
 
 void CP210XImpl::send(void *data, size_t len,IOProvider::send_callback callback) 
 {
-	device.data_sent.connect_extended([this,callback](signals2::connection c,
-	                                              int status,
-												  size_t len) {
+	int ret = device.send_async(data,len,[=](int status,size_t len) {
 		if(log_level) std::cerr << "CP210XImpl::data_sent" << std::endl;
 		
-		c.disconnect();
-				
 		if(!callback(len,system::error_code(status ? EIO : 0,system::system_category()))) {
 			this->device.recv_async();
 		}
 	});
 	
-	int ret = device.send_async(data,len);
 	if(ret) {
 		callback(0,system::error_code(errno,system::system_category()));
-	}
-	
+	}	
 	
 	/*
 	int ret = device.send(data,len);
