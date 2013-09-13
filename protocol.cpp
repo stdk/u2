@@ -220,6 +220,7 @@ IOProvider* create_cp210x_impl(const char *path,uint32_t baud);
 IOProvider* create_asio_impl(const char *path,uint32_t baud);
 IOProvider* create_asio_mt_impl(const char *path,uint32_t baud);
 IOProvider* create_file_impl(const char *path,uint32_t baud);
+IOProvider* create_tcp_impl(const char *path,uint32_t baud);
 
 static IOProvider * get_impl(const char *path, uint32_t baud,const char *impl_tag)
 {
@@ -231,8 +232,8 @@ static IOProvider * get_impl(const char *path, uint32_t baud,const char *impl_ta
 #endif
     if(s == "asio-mt") return create_asio_mt_impl(path,baud);
 	if(s == "asio") return create_asio_impl(path,baud);
-	
 	if(s == "file") return create_file_impl(path,baud);	
+	if(s == "tcp") return create_tcp_impl(path,baud);
 
 	return 0;
 }
