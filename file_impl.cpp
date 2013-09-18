@@ -7,6 +7,7 @@
 #include <boost/signals2.hpp>
 
 #include "protocol.h"
+#include "subway_protocol.h"
 #include "card_storage.h"
 #include "commands.h"
 #include "api_common.h"
@@ -18,6 +19,8 @@
 using namespace boost;
 
 const int log_level = 0;
+
+
 
 class FileImpl : public IOProvider, public ISaveLoadable
 {

@@ -38,5 +38,5 @@ API_FUNCTION_1_TO_1(REQUEST_WRITE_FILE,proxy_request_write_file,request_write_fi
 
 EXPORT long proxy_write_file(Reader* reader,void* data, uint8_t len)
 {
-	return reader->send_command(WRITE_FILE,data,len,0,0);
+	return reader->send_command<SubwayProtocol>(WRITE_FILE,data,len,0,0);
 }

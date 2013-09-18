@@ -1,20 +1,7 @@
 #include "protocol.h"
 #include "subway_protocol.h"
 #include "api_internal.h"
-#include "crc16.h"
 
-#include <boost/scoped_array.hpp>
-
-#ifdef WIN32
-#define NOMINMAX
-#include <windows.h>
-#endif
-
-#include <time.h>
-#include <iostream>
-#include <iomanip>
-#include <string>
-#include <cstring>
 #include <algorithm>
 
 using namespace std;
@@ -27,149 +14,6 @@ void debug_data(const char* header,void* data,size_t len)
 		fprintf(stderr,"%02hhX ",bytes[i]);
 	}
 	fprintf(stderr,"\n");
-}
-
-size_t PacketHeader::full_size()
-{
-	return sizeof(*this) + this->len + CRC_LEN;
-}
-
-bool PacketHeader::crc_check()
-{
-	size_t len = this->full_size() - CRC_LEN;
-	CRC16_Calc(this,len);
-	uint8_t *p = (uint8_t*)this;
-	return p[len] == CRC16_Low && p[len+1] == CRC16_High;
-}
-
-uint32_t PacketHeader::nack_data()
-{
-	uint32_t result = 0;
-	get_data(&result,sizeof(result));		
-	return result;
-}
-
-uint8_t* PacketHeader::data() 
-{
-	return (uint8_t*)this + sizeof(*this);
-}
-
-size_t PacketHeader::get_data(void *buf,size_t len)
-{
-	size_t copy_len = min((size_t)this->len,len);
-	memcpy(buf,data(),copy_len);
-	return copy_len;
-}
-
-uint16_t prepare_packet(uint8_t code,void *packet,size_t packet_len)
-{
-	PacketHeader* header = (PacketHeader*)packet;
-	header->head = FBGN;
-	header->addr = 0;
-	header->code = code;
-
-	CRC16_Calc(packet,packet_len - CRC_LEN);
-
-    uint8_t *packet_u8 = (uint8_t*)packet;
-	packet_u8[packet_len - 1] = CRC16_High;
-	packet_u8[packet_len - 2] = CRC16_Low;
-
-	return (CRC16_High << 8) + CRC16_Low;
-}
-
-long create_custom_packet(void *packet,size_t max_packet_len,uint8_t code,void *data,uint8_t len)
-{
-	if(max_packet_len < sizeof(PacketHeader)) return -1;
-
-	PacketHeader *header = (PacketHeader*)packet;
-	header->len = len;
-	
-	size_t packet_len = header->full_size();
-	if(max_packet_len < packet_len) return -1;
-#ifdef WIN32
-#pragma warning( push )
-#pragma warning( disable : 4200 )
-#endif
-	struct CustomPacket {
-		PacketHeader header;
-		uint8_t contents[0];
-	} *custom_packet = (CustomPacket*)packet;
-#ifdef WIN32
-#pragma warning( pop )
-#endif
-
-	memcpy(custom_packet->contents,data,len);
-	prepare_packet(code,packet,packet_len);	
-
-	return packet_len;
-}
-
-size_t unbytestaff(void *dst_buf,size_t dst_len,void *src_buf,size_t src_len, bool wait_for_fbgn)
-{
-	if(!dst_len || !src_len) return 0;
-
-	uint8_t *src = (uint8_t*)src_buf;
-	uint8_t *src_end = src + src_len;
-	uint8_t *dst = (uint8_t*)dst_buf;
-	uint8_t *dst_end = dst + dst_len;
-
-	while(wait_for_fbgn && src != src_end && *src != FBGN && src++);
-
-	//debug_data("src_buf",src,src_end-src);
-
-	bool escape = false;
-	while( src != src_end && dst != dst_end ) {
-		uint8_t c = *src++;
-		if(escape) {
-			*dst++ = c == TFBGN ? FBGN : FESC;
-			if(c != TFBGN && c != TFESC && dst != dst_end) *dst++ = c; 
-			escape = false;
-		} else {
-			if(c == FESC) escape = true;
-			else *dst++ = c;
-		}
-	}
-    return dst - (uint8_t*)dst_buf;
-}
-
-size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len)
-{
-	if(!dst_len) return 0;
-
-	uint8_t *src = (uint8_t*)src_buf;
-	uint8_t *src_end = src + src_len;
-	uint8_t *dst = (uint8_t*)dst_buf;
-	uint8_t *dst_end = dst + dst_len;
-	
-	*dst++ = *src++;
-	while( src != src_end && dst != dst_end ) {
-		uint8_t c = *src++;
-		if(c == FBGN) { 
-			*dst++ = FESC;
-			if(dst != dst_end) *dst++ = TFBGN;
-		} else if(c == FESC) {
-			*dst++ = FESC;
-			if(dst != dst_end) *dst++ = TFESC;
-		} else *dst++ = c;
-	}
-	
-	return dst - (uint8_t*)dst_buf;;
-}
-
-
-EXPORT long bytestaffing_test(uint8_t *data,size_t len)
-{
-	//debug_data("data_in",data,len);
-
-	scoped_array<uint8_t> bs(new uint8_t[len*2]);
-	size_t bs_len = bytestaff(bs.get(),len*2,data,len);
-	//debug_data("data_bs",bs.get(),bs_len);	
-
-	scoped_array<uint8_t> un_bs(new uint8_t[len]);
-	size_t un_bs_len = unbytestaff(un_bs.get(),len,bs.get(),bs_len,false);
-	//debug_data("data_un",un_bs.get(),un_bs_len);
-
-	return un_bs_len == len ? memcmp(un_bs.get(),data,len) : -1;
 }
 
 IOProvider::~IOProvider() 
@@ -248,39 +92,31 @@ Reader::~Reader()
 	delete impl;
 }
 
-long Reader::send_command(uint8_t code,void *data, size_t len,void *answer, size_t answer_len)
-{
-	uint8_t packet[512] = {0};
-	long packet_len = create_custom_packet(packet,sizeof(packet),code,data,len);
-	if(packet_len == -1) return -1;
-
-	return send_command(packet,packet_len,answer,answer_len);
-}
-
-long Reader::send_command(void *data,size_t len,void *answer,size_t answer_len)
+long Reader::send_command(Protocol *protocol,uint8_t code, void *data, size_t len,void *answer, size_t answer_len)
 {
 	if(!impl) {
 		fprintf(stderr,"NO_IMPL\n");
 		return NO_IMPL;	
 	}
 
-	SubwayProtocol protocol(impl);
+	//SubwayProtocol protocol(impl);
 	
-	protocol.send(data,len);
+	if(long send_ret = protocol->send(code,data,len)) {
+		return send_ret;
+	}
 		
-	ProtocolAnswer protocol_answer = protocol.get_answer();
+	ProtocolAnswer protocol_answer = protocol->get_answer();
 	if(protocol_answer.result) return protocol_answer.result;
 		
-	PacketHeader *header = (PacketHeader*)protocol_answer.data;
-		
-	if(!header->crc_check()) return PACKET_CRC_ERROR;
-	if(header->code == NACK_BYTE) return header->nack_data();
+	if(answer) {
+		size_t copy_len = min(protocol_answer.len,answer_len);
+		memcpy(answer,protocol_answer.data,copy_len);		
+	}
 
-	if(answer) header->get_data(answer,answer_len);
-	if(header->len != answer_len) {
-		uint16_t payload = (header->len << 8) + answer_len;
+	if(protocol_answer.len != answer_len) {
+		uint16_t payload = (protocol_answer.len << 8) + answer_len;
 		return PACKET_DATA_LEN_ERROR | (payload << 8);
 	}
 
-	return 0;	    
+	return 0;	 
 }

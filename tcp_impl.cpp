@@ -7,7 +7,7 @@
 #include <vector>
 #include <string>
 
-//#define BOOST_ASIO_ENABLE_CANCELIO 
+#define BOOST_ASIO_ENABLE_CANCELIO 
 
 #include <boost/format.hpp>
 #include <boost/bind.hpp>
@@ -27,36 +27,82 @@ using boost::asio::ip::tcp;
 static const int log_level = 0;
 static const size_t connect_timeout = 3000;
 
-/*
-void set_socket_timeouts(boost::asio::ip::tcp::socket& socket,size_t timeout_ms)
+class Connector
 {
-#ifdef WIN32
-    int32_t timeout = timeout_ms;
-    setsockopt(socket.native(), SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
-    setsockopt(socket.native(), SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
-#else
-    struct timeval tv;
-    tv.tv_sec  = timeout_ms / 1000; 
-    tv.tv_usec = (timeout_ms % 1000) * 1000;         
-    setsockopt(socket.native(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    setsockopt(socket.native(), SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-#endif
-}*/
+	void async_connect(tcp::socket &socket, tcp::resolver::iterator i) {
+		if(log_level) std::cerr << "async_connect " << std::endl;
+		try {
+			socket.async_connect(*i,bind(&Connector::connect_callback,this,
+				asio::placeholders::error,ref(socket),i));
+		} catch(system::system_error &e) {
+			std::cerr << "async_connect: " << e.what() << std::endl;
+		}
+	}
 
+	void connect_callback(const system::error_code &error, tcp::socket &socket, tcp::resolver::iterator i) {
+		if(log_level) std::cerr << "connect_callback " << error.message() << std::endl;
+		if(error != asio::error::operation_aborted && ++i != tcp::resolver::iterator()) {
+			async_connect(socket,i);
+		} else {
+			timeout.cancel();
+			connect_promise.set_value(error);			
+		}
+	}
 
+	void resolve_callback(const system::error_code &error, tcp::socket &socket, tcp::resolver::iterator i) {
+		if(log_level) std::cerr << "resolve_callback " << error.message() << std::endl;
+		if(error != asio::error::operation_aborted && i != tcp::resolver::iterator()) {
+			async_connect(socket,i);
+		} else {
+			timeout.cancel();
+			connect_promise.set_value(error);
+		}
+	}
+
+	void timeout_callback(const system::error_code &error, tcp::socket &socket) {
+		if(log_level) std::cerr << "timeout_callback " << error.message() << std::endl;
+		if(error != asio::error::operation_aborted) {
+			socket.close();
+		} 
+	}
+
+public:
+	Connector(asio::io_service &io_svc):resolver(io_svc),timeout(io_svc) {
+		
+	}
+
+	system::error_code connect(tcp::socket &socket, const std::string &host, const std::string &service) {
+		connect_promise = promise<system::error_code>();
+		boost::unique_future<system::error_code> connect_future = connect_promise.get_future();
+
+		tcp::resolver::query query(host, service);
+		resolver.async_resolve(query,bind(&Connector::resolve_callback,this,
+			asio::placeholders::error,
+			ref(socket),
+			asio::placeholders::iterator));
+
+		timeout.expires_from_now(posix_time::milliseconds(connect_timeout));
+		timeout.async_wait(bind(&Connector::timeout_callback,this,
+			asio::placeholders::error,ref(socket)));
+
+		return connect_future.get();
+	}
+private:
+	tcp::resolver resolver;
+	asio::deadline_timer timeout;
+	promise<system::error_code> connect_promise;
+};
 
 class TcpImpl : public IOProvider
 {
 	asio::io_service io_svc;
-	tcp::resolver resolver;
 	tcp::socket socket;
-	//shared_ptr<asio::io_service::work> work;
 	asio::io_service::work work;
 	asio::deadline_timer timeout;	
 	
 	thread io_thread;
 
-	unsigned char read_buf[64];
+	unsigned char read_buf[512];
 	size_t read_size;
 	
 	boost::promise<system::error_code> connect_promise;
@@ -79,10 +125,6 @@ class TcpImpl : public IOProvider
 	    data_received(read_buf,bytes_transferred);
 		initiate_read();
 
-		/*long packet_found = data_received(read_buf,bytes_transferred);
-		if(!packet_found) {
-			initiate_read();
-		}*/
 	}
 
 	// Any byte that came from serial port is precious.
@@ -96,10 +138,6 @@ class TcpImpl : public IOProvider
 	void write_callback(IOProvider::send_callback callback,size_t bytes_transferred,const system::error_code& error)
 	{
 		callback(bytes_transferred,error);
-		
-		/*if(callback(bytes_transferred,error) == 0) {
-			initiate_read();
-		}*/
 	}
 
 	void wait_callback(function<void ()> callback, const system::error_code& error)
@@ -107,20 +145,14 @@ class TcpImpl : public IOProvider
 		if (error) return;   // Data has been read and this timeout was canceled
 		
 		callback();
-
-		if(log_level) fprintf(stderr,"socket.cancel() begin\n");
-
-		//socket.cancel();
-
-		if(log_level) fprintf(stderr,"socket.cancel() completed\n");
 	}
 
 	// Begin new iteration of packet read by executing async_read 
 	// that keeps io_service running to wait for new packet.
 	//1. check_callback - called every time new portion of data comes from socket and 
 	//   decide whether received should be passed to read_callback.
-	//2. read_callback - this callback signals about receiving data and decides what to do next.
-	//   according to its return value
+	//2. read_callback - this callback signals about receiving data and decides what to do next
+	//   by its return value
 	inline void initiate_read() {
 		if(log_level) std::cerr << "initiate_read" << std::endl;
 
@@ -131,40 +163,8 @@ class TcpImpl : public IOProvider
 			bind(&TcpImpl::read_callback,this,ph::bytes_transferred,ph::error));
 	}
 
-	void connect_callback(const system::error_code &error, tcp::resolver::iterator i) {
-		if(error && ++i != tcp::resolver::iterator()) {
-			async_connect(i);
-		} else {
-			timeout.cancel();
-			connect_promise.set_value(error);			
-		}
-	}
-
-	void async_connect(tcp::resolver::iterator i) {
-		if(log_level) std::cerr << "async_connect " << std::endl;
-		socket.async_connect(*i,bind(&TcpImpl::connect_callback,this,asio::placeholders::error,i));
-	}
-
-	void resolve_callback(const system::error_code &error, tcp::resolver::iterator i) {
-		if(error) {
-			timeout.cancel();
-			connect_promise.set_value(error);
-		} else {
-			async_connect(i);
-		}
-	}
-
-	void connect_timeout_callback(const system::error_code &error) {
-		if(error != asio::error::operation_aborted) {
-			connect_promise.set_value(error);
-		}
-	}
-
 public:
-	TcpImpl(const char *host_port, uint32_t baud):resolver(io_svc),socket(io_svc),
-		//work(new asio::io_service::work(io_svc)),
-		work(io_svc),
-		timeout(io_svc) {
+	TcpImpl(const char *host_port, uint32_t baud):socket(io_svc),work(io_svc),timeout(io_svc) {
 
 		std::vector<std::string> tokens;
 		split(tokens, host_port, is_any_of(":"));
@@ -172,31 +172,11 @@ public:
 		if(tokens.size() != 2) {
 			throw_exception(system::system_error(boost::asio::error::invalid_argument));
 		}
-/*
-		tcp::resolver resolver(io_svc);
-		tcp::resolver::query query( tokens[0], tokens[1]);
-		tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
-		tcp::resolver::iterator end;
-
-		boost::system::error_code error = boost::asio::error::host_not_found;
-		while (error && endpoint_iterator != end)
-		{
-			socket.close();
-			socket.connect(*endpoint_iterator++, error);
-		}*/
-
-		tcp::resolver::query query( tokens[0], tokens[1]);
-		resolver.async_resolve(query,bind(&TcpImpl::resolve_callback,this,
-			asio::placeholders::error,asio::placeholders::iterator));
-
-		timeout.expires_from_now(posix_time::milliseconds(connect_timeout));
-		timeout.async_wait(bind(&TcpImpl::connect_timeout_callback,this,asio::placeholders::error));
-
-		boost::unique_future<system::error_code> connect_future = connect_promise.get_future();
 
 		io_thread = thread(bind(&TcpImpl::io_service_thread,this));
 
-		system::error_code error = connect_future.get();
+		Connector connector(io_svc);
+		system::error_code error = connector.connect(socket,tokens[0],tokens[1]);
 		if (error) {
 			if(log_level) std::cerr << "throw_exception" << std::endl;
 			throw_exception(system::system_error(error));
@@ -207,12 +187,16 @@ public:
 
 	void io_service_thread() {
 		if(log_level) std::cerr << "starting io_svc" << std::endl;
-		io_svc.run();
-		if(log_level) std::cerr << "io_svc stopped" << std::endl;
+
+		system::error_code e;
+		io_svc.run(e);
+		if(e) std::cerr << "io_svc: " << e.message() << std::endl;
+		
+		if(log_level) std::cerr << "io_svc[stopped]" << std::endl;
 		//socket.shutdown(asio::socket_base::shutdown_both);
 		
-		system::error_code e;
 		socket.close(e); //socket closed from the same thread as io service
+		if(e) std::cerr << "socket.close() : " << e.message() << std::endl;
 	}
 
 	virtual ~TcpImpl() {

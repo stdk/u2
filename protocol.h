@@ -5,6 +5,7 @@
 #include <boost/thread/future.hpp>
 #include <boost/function.hpp>
 #include <boost/system/error_code.hpp>
+
 using namespace boost;
 
 #define ERR_MASK                0xFF0000FF
@@ -24,110 +25,19 @@ using namespace boost;
 #define PACKET_CRC_ERROR        0x0E0000CC
 #define PACKET_DATA_LEN_ERROR   0x0E0000DE
 
-
-#define FBGN        0xFF
-#define FESC        0xF1
-#define TFBGN       0xF2
-#define TFESC       0xF3
-
-#define ACK_BYTE	0x00
-#define NACK_BYTE	0x01
-
-#define CRC_LEN		2
-
-size_t unbytestaff(void* dst_buf,size_t dst_len,void *src_buf,size_t src_len,bool wait_for_fbgn = true);
-size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len);
 void debug_data(const char* header,void* data,size_t len);
-
-#pragma pack(push,1)
-struct PacketHeader
-{
-	//returns full packet size using information from header
-	size_t full_size();
-
-	//Warning: this method assumes that `this` points 
-	//to a buffer of at least this->full_size() length
-	//to be able to check correctness of last 2 bytes
-	//without access violation.
-	bool crc_check();
-
-	//Warning: this function assumes, that `this` points 
-	//to buffer of at least this->full_size() length.
-	//If code == NACK_BYTE, it means error happened
-	//and information about that error came in packet data.	
-	//No more that 4 bytes of nack data can be retrieved this way.
-	inline uint32_t nack_data();
-
-	//Warning: this function assumes, that `this` points 
-	//to buffer of at least this->full_size() length.
-	//Copies data contents of this packet to given buffer.
-	size_t get_data(void* buf,size_t len);
-
-	//Returns pointer to data section of this packet or 0
-	//if there is no data in packet.
-	uint8_t* data();
-
-	uint8_t head;
-	uint8_t addr;
-	uint8_t code;
-	uint8_t len;
-};
-#pragma pack(pop)
-
-uint16_t prepare_packet(uint8_t code,void *packet,size_t packet_len);
-
-#pragma pack(push,1)
-template<typename T>
-struct Packet
-{
-	Packet(uint8_t code,T *data=0) {
-		this->header.len = sizeof(T);
-		if(data) this->data = *data;
-		this->crc = prepare_packet(code,this,sizeof(*this));
-	}
-
-	PacketHeader header;
-	T data;
-	uint16_t crc;
-};
-#pragma pack(pop)
-
-// Parameters:
-// void* packet - buffer for packet being constructed
-// size_t max_packet_len - Length of packet buffer. Maximal possible length of constructed packet.
-// uint8_t code - code of packet being constructed
-// void *data - payload of packet being constructed
-// uint8_t len - length of data buffer
-//
-// Return value:
-// -1 when there is not enough space in given buffer for complete packet;
-// length of successfully constructed packet otherwise
-long create_custom_packet(void* packet,size_t max_packet_len,uint8_t code,void *data,uint8_t len);
-
-#pragma pack(push,1)
-struct EmptyPacket
-{
-	EmptyPacket(uint8_t code) {
-		this->header.len = 0;
-		this->crc = prepare_packet(code,this,sizeof(*this));
-	}
-
-	PacketHeader header;
-	uint16_t crc;
-};
-#pragma pack(pop)
 
 class IOProvider
 {
 public:
 	// write_callback return value specifies the course of action, that IOProvider should take: 
-	//  0 -> everything is ok, IOProvider should initiate reading after that;
+	//  0 -> everything is ok, IOProvider may initiate reading after that;
 	// -1 -> write failed, IOProvider should not initiate reading.
 	typedef function<long (size_t bytes_transferred, const system::error_code&)> send_callback;
 	
 	// listen callback notifies user about data that came from IOProvider.
 	// IOProvider may possibly interpret return value of this callback
-	// a basis for its next actions: 
+	// as a basis for its next actions: 
 	// 0 -> IOProvider should continue reading;
 	// 1 -> user has fulfilled its task, no more reading required.
     typedef function<long (void *data, size_t len)> listen_callback;
@@ -168,7 +78,7 @@ public:
 	// Return values:
 	// -1 -> protocol startup sequence failed (e.g. provider could not send some data);
 	//  0 -> startup sequence succeded
-	virtual void send(void *data, size_t len) = 0;
+	virtual long send(uint8_t code, void *data, size_t len) = 0;
 
 	// This method returns results of protocol work.
 	// It blocks calling thread until there is complete packet in its buffer.
@@ -176,7 +86,7 @@ public:
 
 protected:
 	// This method can be used to set answer externally, to make get_answer
-	// return prematurely. (e.g. in timeout callback).
+	// return prematurely. (e.g. due to timeout).
 	virtual void set_answer(ProtocolAnswer answer);
 };
 
@@ -191,29 +101,35 @@ public:
 class Reader
 {
 	IOProvider *impl;
+
+	long send_command(Protocol *protocol,uint8_t code,void *data, size_t len,void *answer, size_t answer_len);	
 public:
 	Reader(const char* path, uint32_t baud,const char* impl_tag);
 	~Reader();
 
-	template<class Request,class Answer>
+	template<class Proto,class Request,class Answer>
 	inline long send_command(int code,Request *request,Answer *answer = 0,size_t size = sizeof(Answer)) {
-		Packet<Request> packet(code,request);
-		return send_command(&packet,sizeof(packet),answer,answer ? size : 0);
+		Proto protocol(impl);
+		return send_command(&protocol,code,request,sizeof(*request),answer,answer ? size : 0);
 	}
 
-	template<class Answer>
+	template<class Proto,class Answer>
 	inline long send_command(uint8_t code,Answer *answer,size_t size = sizeof(Answer)) {
-		EmptyPacket packet(code);
-		return send_command(&packet,sizeof(packet),answer,answer ? size : 0);
+		Proto protocol(impl);
+		return send_command(&protocol,code,0,0,answer,answer ? size : 0);
 	}
 
-	long send_command(uint8_t code,void *data, size_t len,void *answer, size_t answer_len);	
-
+	template<class Proto>
 	inline long send_command(uint8_t code) {
-		return send_command(code,(uint8_t*)0);
+		Proto protocol(impl);
+		return send_command(&protocol,code,0,0,0,0);
 	}
 
-	long send_command(void* data,size_t len,void *answer,size_t answer_len);
+	template<class Proto>
+	long send_command(uint8_t code,void *data, size_t len,void *answer, size_t answer_len) {
+		Proto protocol(impl);
+		return send_command(&protocol,code,data,len,answer,answer_len);
+	}
 
 	long save(const char* path);
 	long load(const char* path);

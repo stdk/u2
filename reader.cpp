@@ -35,7 +35,7 @@ struct MPCOMMAND
 EXPORT long reader_sync(Reader* reader)
 {
 	MPCOMMAND mp = { 0, 1 };
-	return reader->send_command(SYNC_WITH_DEVICE,&mp,(uint8_t*)0);
+	return reader->send_command<SubwayProtocol>(SYNC_WITH_DEVICE,&mp,(uint8_t*)0);
 }
 
 void debug_data(const char* header,void* data,size_t len);
@@ -76,7 +76,7 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 		debug_data("packet",packet,packet_len);
 #endif
 		
-		long ret = reader->send_command(MULTIBYTE_PACKAGE,package,package_len,0,0);
+		long ret = reader->send_command<SubwayProtocol>(MULTIBYTE_PACKAGE,package,package_len,0,0);
 		
 		if(ret) return ret;
 
