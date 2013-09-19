@@ -1,4 +1,4 @@
-#include "api_internal.h"
+#include "api_subway_low.h"
 
 #include "protocol.h"
 #include "commands.h"
@@ -35,7 +35,7 @@ struct MPCOMMAND
 EXPORT long reader_sync(Reader* reader)
 {
 	MPCOMMAND mp = { 0, 1 };
-	return reader->send_command<SubwayProtocol>(SYNC_WITH_DEVICE,&mp,(uint8_t*)0);
+	return reader->send_command<SubwayProtocol>(0,SYNC_WITH_DEVICE,&mp,(uint8_t*)0);
 }
 
 void debug_data(const char* header,void* data,size_t len);
@@ -76,7 +76,7 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 		debug_data("packet",packet,packet_len);
 #endif
 		
-		long ret = reader->send_command<SubwayProtocol>(MULTIBYTE_PACKAGE,package,package_len,0,0);
+		long ret = reader->send_command<SubwayProtocol>(0,MULTIBYTE_PACKAGE,package,package_len,0,0);
 		
 		if(ret) return ret;
 
@@ -87,10 +87,10 @@ EXPORT long reader_send_package(Reader* reader,uint8_t *data, uint32_t len)
 	return 0;
 }
 
-EXPORT long reader_open(const char *path,uint32_t baud,const char* impl,Reader **reader)
+EXPORT long reader_open(const char *path,uint32_t baud,uint8_t parity,const char* impl,Reader **reader)
 {
 	try {
-		*reader = new Reader(path,baud,impl);
+		*reader = new Reader(path,baud,parity,impl);
 		return 0;
 	} catch(boost::system::system_error& e) {
 		std::cerr << e.what() << std::endl;

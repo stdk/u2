@@ -87,11 +87,12 @@ class AsioImpl : public IOProvider
 			bind(&AsioImpl::read_callback,this,ph::bytes_transferred,ph::error));
 	}
 public:
-	AsioImpl(const char* path,uint32_t baud):serial(io_svc),timeout(io_svc),read_size(1) {
+	AsioImpl(const char* path,uint32_t baud,uint8_t parity)
+		:serial(io_svc),timeout(io_svc),read_size(1) {
 		
 		serial.open( path );
 
-		const asio::serial_port_base::parity parity_opt(asio::serial_port_base::parity::none);
+		const asio::serial_port_base::parity parity_opt((asio::serial_port_base::parity::type)parity);
 		const asio::serial_port_base::stop_bits stop_bits_opt(asio::serial_port_base::stop_bits::one);
 
 		serial.set_option(asio::serial_port_base::baud_rate(baud));
@@ -148,7 +149,7 @@ long AsioImpl::cancel_timeout()
 	return 0;
 }
 
-IOProvider* create_asio_impl(const char* path,uint32_t baud)
+IOProvider* create_asio_impl(const char* path,uint32_t baud,uint8_t parity)
 {
-	return new AsioImpl(path,baud);
+	return new AsioImpl(path,baud,parity);
 }

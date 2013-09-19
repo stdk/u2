@@ -10,8 +10,6 @@
 #include "protocol.h"
 #include "commands.h"
 
-#include "api_internal.h"
-
 using namespace std;
 
 using boost::iostreams::file_source;
@@ -138,7 +136,9 @@ long Reader::save(const char *path)
 		sector->num = A->num;
 		sector->key = A->key;
 		sector->mode = A->mode;
-		CHECK(card_sector_auth_tenacious(this,&card,sector));
+		
+		long ret = card_sector_auth_tenacious(this,&card,sector);
+		if(ret) return ret;
 
 		//if any of enc modes != 0xFF then we should use by-block reading
 		if(A->sector_enc) {

@@ -10,7 +10,7 @@
 #include "subway_protocol.h"
 #include "card_storage.h"
 #include "commands.h"
-#include "api_common.h"
+#include "api_subway_high.h"
 #include "custom_combiners.h"
 
 #define CARD_TYPE_STANDARD   0x4
@@ -33,7 +33,7 @@ class FileImpl : public IOProvider, public ISaveLoadable
 	signals2::signal<long (void *data, size_t len),combiner::maximum<long> > data_received;
 public:
 
-	FileImpl(const char* path,uint32_t baud):storage(path) {
+	FileImpl(const char* path,uint32_t baud,uint8_t):storage(path) {
 
 		handlers[GET_SN]          = &FileImpl::get_sn;
 		handlers[GET_VERSION]     = &FileImpl::get_version;
@@ -92,9 +92,9 @@ public:
 		uint8_t packet[256] = {0};
 		size_t packet_len = 0;
 		if(ret) {
-			packet_len = create_custom_packet(packet,sizeof(packet),NACK_BYTE,&ret,sizeof(ret));
+			packet_len = create_custom_packet(packet,sizeof(packet),0,NACK_BYTE,&ret,sizeof(ret));
 		} else {
-			packet_len = create_custom_packet(packet,sizeof(packet),header->code,data_buf,data_buf_len);
+			packet_len = create_custom_packet(packet,sizeof(packet),0,header->code,data_buf,data_buf_len);
 		}
 
 		uint8_t response[512] = {0};
@@ -298,7 +298,7 @@ public:
 	}
 };
 
-IOProvider* create_file_impl(const char* path,uint32_t baud)
+IOProvider* create_file_impl(const char* path,uint32_t baud,uint8_t parity)
 {
-	return new FileImpl(path,baud);
+	return new FileImpl(path,baud,parity);
 }

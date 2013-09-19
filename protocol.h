@@ -8,6 +8,12 @@
 
 using namespace boost;
 
+#ifndef WIN32
+#define PARITY_NONE             0
+#define PARITY_ODD              1
+#define PARITY_EVEN             2
+#endif
+
 #define ERR_MASK                0xFF0000FF
 
 #define ERROR_BASE              0x0A000000
@@ -58,11 +64,13 @@ public:
 struct ProtocolAnswer
 {
 	long result;
+	uint8_t addr;
+	uint8_t code;
 	void *data;
 	size_t len;
 
-	ProtocolAnswer(void *_data, size_t _len);
-	ProtocolAnswer(long _result);
+	ProtocolAnswer(void *_data, size_t _len, uint8_t addr = 0, uint8_t code = 0);
+	ProtocolAnswer(long _result,uint8_t addr = 0, uint8_t code = 0);
 };
 
 class Protocol
@@ -78,7 +86,7 @@ public:
 	// Return values:
 	// -1 -> protocol startup sequence failed (e.g. provider could not send some data);
 	//  0 -> startup sequence succeded
-	virtual long send(uint8_t code, void *data, size_t len) = 0;
+	virtual long send(uint8_t addr, uint8_t code, void *data, size_t len) = 0;
 
 	// This method returns results of protocol work.
 	// It blocks calling thread until there is complete packet in its buffer.
@@ -102,33 +110,36 @@ class Reader
 {
 	IOProvider *impl;
 
-	long send_command(Protocol *protocol,uint8_t code,void *data, size_t len,void *answer, size_t answer_len);	
+	long send_command(Protocol *protocol,uint8_t addr, uint8_t code,
+		              void *data, size_t len,void *answer, size_t answer_len);	
 public:
-	Reader(const char* path, uint32_t baud,const char* impl_tag);
+	Reader(const char* path, uint32_t baud,uint8_t parity,const char* impl_tag);
 	~Reader();
 
 	template<class Proto,class Request,class Answer>
-	inline long send_command(int code,Request *request,Answer *answer = 0,size_t size = sizeof(Answer)) {
+	inline long send_command(uint8_t addr, uint8_t code,
+		                     Request *request,Answer *answer = 0,size_t size = sizeof(Answer)) {
 		Proto protocol(impl);
-		return send_command(&protocol,code,request,sizeof(*request),answer,answer ? size : 0);
+		return send_command(&protocol,addr,code,request,sizeof(*request),answer,answer ? size : 0);
 	}
 
 	template<class Proto,class Answer>
-	inline long send_command(uint8_t code,Answer *answer,size_t size = sizeof(Answer)) {
+	inline long send_command(uint8_t addr, uint8_t code,
+		                     Answer *answer,size_t size = sizeof(Answer)) {
 		Proto protocol(impl);
-		return send_command(&protocol,code,0,0,answer,answer ? size : 0);
+		return send_command(&protocol,addr,code,0,0,answer,answer ? size : 0);
 	}
 
 	template<class Proto>
-	inline long send_command(uint8_t code) {
+	inline long send_command(uint8_t addr, uint8_t code) {
 		Proto protocol(impl);
-		return send_command(&protocol,code,0,0,0,0);
+		return send_command(&protocol,addr,code,0,0,0,0);
 	}
 
 	template<class Proto>
-	long send_command(uint8_t code,void *data, size_t len,void *answer, size_t answer_len) {
+	long send_command(uint8_t addr, uint8_t code,void *data, size_t len,void *answer, size_t answer_len) {
 		Proto protocol(impl);
-		return send_command(&protocol,code,data,len,answer,answer_len);
+		return send_command(&protocol,addr,code,data,len,answer,answer_len);
 	}
 
 	long save(const char* path);

@@ -1,7 +1,7 @@
 #ifndef CARD_STORAGE
 #define CARD_STORAGE
 
-#include "api_common.h"
+#include "api_subway_high.h"
 
 struct SectorStorage : public Sector
 {

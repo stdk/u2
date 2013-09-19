@@ -164,7 +164,8 @@ class TcpImpl : public IOProvider
 	}
 
 public:
-	TcpImpl(const char *host_port, uint32_t baud):socket(io_svc),work(io_svc),timeout(io_svc) {
+	TcpImpl(const char *host_port, uint32_t baud, uint8_t)
+		:socket(io_svc),work(io_svc),timeout(io_svc) {
 
 		std::vector<std::string> tokens;
 		split(tokens, host_port, is_any_of(":"));
@@ -254,7 +255,7 @@ long TcpImpl::cancel_timeout()
 	return 0;
 }
 
-IOProvider* create_tcp_impl(const char* path,uint32_t baud)
+IOProvider* create_tcp_impl(const char* path,uint32_t baud,uint8_t parity)
 {
-	return new TcpImpl(path,baud);
+	return new TcpImpl(path,baud,parity);
 }

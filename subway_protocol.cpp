@@ -1,6 +1,7 @@
 #include "subway_protocol.h"
+
+#include "api_subway_low.h"
 #include "crc16.h"
-#include "api_internal.h"
 
 #include <string>
 #include <cstring>
@@ -14,43 +15,37 @@ using namespace boost;
 static const size_t TIMEOUT = 1500;
 static const int log_level = getenv("DEBUG_SUBWAY_PROTOCOL") != 0;
 
-size_t PacketHeader::full_size()
-{
+size_t PacketHeader::full_size() const {
 	return sizeof(*this) + this->len + CRC_LEN;
 }
 
-bool PacketHeader::crc_check()
-{
+bool PacketHeader::crc_check() const {
 	size_t len = this->full_size() - CRC_LEN;
 	CRC16_Calc(this,len);
 	uint8_t *p = (uint8_t*)this;
 	return p[len] == CRC16_Low && p[len+1] == CRC16_High;
 }
 
-uint32_t PacketHeader::nack_data()
-{
+uint32_t PacketHeader::nack_data() const {
 	uint32_t result = 0;
 	get_data(&result,sizeof(result));		
 	return result;
 }
 
-uint8_t* PacketHeader::data() 
-{
+uint8_t* PacketHeader::data() const {
 	return (uint8_t*)this + sizeof(*this);
 }
 
-size_t PacketHeader::get_data(void *buf,size_t len)
-{
+size_t PacketHeader::get_data(void *buf,size_t len) const {
 	size_t copy_len = std::min((size_t)this->len,len);
 	memcpy(buf,data(),copy_len);
 	return copy_len;
 }
 
-uint16_t prepare_packet(uint8_t code,void *packet,size_t packet_len)
-{
+uint16_t prepare_packet(uint8_t addr, uint8_t code, void *packet, size_t packet_len) {
 	PacketHeader* header = (PacketHeader*)packet;
 	header->head = FBGN;
-	header->addr = 0;
+	header->addr = addr;
 	header->code = code;
 
 	CRC16_Calc(packet,packet_len - CRC_LEN);
@@ -62,8 +57,9 @@ uint16_t prepare_packet(uint8_t code,void *packet,size_t packet_len)
 	return (CRC16_High << 8) + CRC16_Low;
 }
 
-long create_custom_packet(void *packet,size_t max_packet_len,uint8_t code,void *data,uint8_t len)
-{
+long create_custom_packet(void *packet, size_t max_packet_len,
+						  uint8_t addr, uint8_t code,
+						  void *data, uint8_t len) {
 	if(max_packet_len < sizeof(PacketHeader)) return -1;
 
 	PacketHeader *header = (PacketHeader*)packet;
@@ -84,13 +80,12 @@ long create_custom_packet(void *packet,size_t max_packet_len,uint8_t code,void *
 #endif
 
 	memcpy(custom_packet->contents,data,len);
-	prepare_packet(code,packet,packet_len);	
+	prepare_packet(addr,code,packet,packet_len);	
 
 	return packet_len;
 }
 
-size_t unbytestaff(void *dst_buf,size_t dst_len,void *src_buf,size_t src_len, bool wait_for_fbgn)
-{
+size_t unbytestaff(void *dst_buf,size_t dst_len,void *src_buf,size_t src_len, bool wait_for_fbgn) {
 	if(!dst_len || !src_len) return 0;
 
 	uint8_t *src = (uint8_t*)src_buf;
@@ -117,8 +112,7 @@ size_t unbytestaff(void *dst_buf,size_t dst_len,void *src_buf,size_t src_len, bo
     return dst - (uint8_t*)dst_buf;
 }
 
-size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len)
-{
+size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len) {
 	if(!dst_len) return 0;
 
 	uint8_t *src = (uint8_t*)src_buf;
@@ -138,12 +132,11 @@ size_t bytestaff(void *dst_buf, size_t dst_len, void *src_buf,size_t src_len)
 		} else *dst++ = c;
 	}
 	
-	return dst - (uint8_t*)dst_buf;;
+	return dst - (uint8_t*)dst_buf;
 }
 
 
-EXPORT long bytestaffing_test(uint8_t *data,size_t len)
-{
+EXPORT long bytestaffing_test(uint8_t *data,size_t len) {
 	//debug_data("data_in",data,len);
 
 	scoped_array<uint8_t> bs(new uint8_t[len*2]);
@@ -189,11 +182,11 @@ struct EmptyPacket
 */
 
 
-Unbytestaffer::Unbytestaffer() {
+SubwayUnbytestaffer::SubwayUnbytestaffer() {
 	reset();
 }
 
-size_t Unbytestaffer::feed(void *data, size_t len) {
+size_t SubwayUnbytestaffer::feed(void *data, size_t len) {
 	if(!data || !len) return 0;
 
 	uint8_t *src = (uint8_t*)data;
@@ -222,34 +215,31 @@ size_t Unbytestaffer::feed(void *data, size_t len) {
 	return bytes_parsed;
 }
 
-void Unbytestaffer::reset() {
+void SubwayUnbytestaffer::reset() {
 	sink = buffer;
 	wait_for_fbgn = true;
 	escape = false;
 }
 
 
-SubwayProtocol::SubwayProtocol(IOProvider *_provider):provider(_provider)
-{
+SubwayProtocol::SubwayProtocol(IOProvider *_provider):provider(_provider) {
 	disconnect = provider->listen(bind(&SubwayProtocol::feed,this,_1,_2));
 }
 
-SubwayProtocol::~SubwayProtocol()
-{
+SubwayProtocol::~SubwayProtocol() {
 	if(!disconnect.empty()) disconnect();
 }
 
 // This method will be used as callback in IOProvider->set_timeout.
 // Fires when maximum packet waiting time expired. If its called, that means not 
 // enough data came from the serial port to be recognized as a complete packet by read callbacks.
-void SubwayProtocol::timeout()
-{
+void SubwayProtocol::timeout() {
 	if(log_level) std::cerr << "SubwayProtocol::timeout" << std::endl;
 	set_answer(ProtocolAnswer(NO_ANSWER));
 }
 
-long SubwayProtocol::write_callback(size_t bytes_sent_to_transfer, size_t bytes_transferred,const system::error_code &error)
-{
+long SubwayProtocol::write_callback(size_t bytes_sent_to_transfer, size_t bytes_transferred,
+									const system::error_code &error) {
 	if (error)
 	{
 		std::cerr << "write_callback error:" << error << ": " << error.message() << std::endl;
@@ -264,9 +254,9 @@ long SubwayProtocol::write_callback(size_t bytes_sent_to_transfer, size_t bytes_
 	return 0;
 }
 
-long SubwayProtocol::send(uint8_t code, void *data, size_t len) {
+long SubwayProtocol::send(uint8_t addr, uint8_t code, void *data, size_t len) {
 	uint8_t packet[256] = {0};
-	long packet_len = create_custom_packet(packet,sizeof(packet),code,data,len);
+	long packet_len = create_custom_packet(packet,sizeof(packet),addr,code,data,len);
 	if(packet_len == -1) {
 		std::cerr << "create_custom_packet failed for command code: " << code << std::endl;
 		return -0xCF;
@@ -282,8 +272,7 @@ long SubwayProtocol::send(uint8_t code, void *data, size_t len) {
 	return 0;
 }
 
-void SubwayProtocol::set_answer(ProtocolAnswer answer)
-{
+void SubwayProtocol::set_answer(ProtocolAnswer answer) {
 	if(!disconnect.empty()) {
 		disconnect();
 		disconnect.clear();
@@ -303,15 +292,14 @@ long SubwayProtocol::feed(void *data, size_t len) {
 
 	PacketHeader *header = filter.get<PacketHeader*>();
 
-	size_t full_packet_size = filter.get<PacketHeader*>()->full_size();
 	if(filter.size() < header->full_size()) return 0; //not enough data
 
 	if(!header->crc_check()) {
 		set_answer(ProtocolAnswer(PACKET_CRC_ERROR));
 	} else if(header->code == NACK_BYTE) {
-		set_answer(ProtocolAnswer(header->nack_data()));
+		set_answer(ProtocolAnswer(header->nack_data(),header->addr,header->code));
 	} else {
-		set_answer(ProtocolAnswer(header->data(),header->len));
+		set_answer(ProtocolAnswer(header->data(),header->len,header->addr,header->code));
 	}
 
 	return 1;

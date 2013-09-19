@@ -1,6 +1,4 @@
 #include "protocol.h"
-#include "subway_protocol.h"
-#include "api_internal.h"
 
 #include <algorithm>
 
@@ -21,12 +19,14 @@ IOProvider::~IOProvider()
 
 }
 
-ProtocolAnswer::ProtocolAnswer(void *_data, size_t _len):result(SUCCESS),data(_data),len(_len) 
+ProtocolAnswer::ProtocolAnswer(void *_data, size_t _len, uint8_t _addr, uint8_t _code)
+:result(SUCCESS),data(_data),len(_len),addr(_addr),code(_code) 
 {
 
 }
 
-ProtocolAnswer::ProtocolAnswer(long _result):result(_result),data(0),len(0)
+ProtocolAnswer::ProtocolAnswer(long _result, uint8_t _addr, uint8_t _code)
+:result(_result),data(0),len(0),addr(_addr),code(_code)
 {
 
 }
@@ -57,34 +57,34 @@ ISaveLoadable::~ISaveLoadable()
 }
 
 #ifdef WIN32
-IOProvider* create_blockwise_impl(const char *path,uint32_t baud);
+IOProvider* create_blockwise_impl(const char *path,uint32_t baud,uint8_t parity);
 #else
-IOProvider* create_cp210x_impl(const char *path,uint32_t baud);
+IOProvider* create_cp210x_impl(const char *path,uint32_t baud,uint8_t parity);
 #endif
-IOProvider* create_asio_impl(const char *path,uint32_t baud);
-IOProvider* create_asio_mt_impl(const char *path,uint32_t baud);
-IOProvider* create_file_impl(const char *path,uint32_t baud);
-IOProvider* create_tcp_impl(const char *path,uint32_t baud);
+IOProvider* create_asio_impl(const char *path,uint32_t baud,uint8_t parity);
+IOProvider* create_asio_mt_impl(const char *path,uint32_t baud,uint8_t parity);
+IOProvider* create_file_impl(const char *path,uint32_t baud,uint8_t parity);
+IOProvider* create_tcp_impl(const char *path,uint32_t baud,uint8_t parity);
 
-static IOProvider * get_impl(const char *path, uint32_t baud,const char *impl_tag)
+static IOProvider * get_impl(const char *impl_tag, const char *path, uint32_t baud, uint8_t parity)
 {
 	std::string s = std::string(impl_tag);
 #ifdef WIN32
-	if(s == "blockwise") return create_blockwise_impl(path,baud);
+	if(s == "blockwise") return create_blockwise_impl(path,baud,parity);
 #else
-	if(s == "cp210x") return create_cp210x_impl(path,baud);
+	if(s == "cp210x") return create_cp210x_impl(path,baud,parity);
 #endif
-    if(s == "asio-mt") return create_asio_mt_impl(path,baud);
-	if(s == "asio") return create_asio_impl(path,baud);
-	if(s == "file") return create_file_impl(path,baud);	
-	if(s == "tcp") return create_tcp_impl(path,baud);
+    if(s == "asio-mt") return create_asio_mt_impl(path,baud,parity);
+	if(s == "asio") return create_asio_impl(path,baud,parity);
+	if(s == "file") return create_file_impl(path,baud,parity);	
+	if(s == "tcp") return create_tcp_impl(path,baud,parity);
 
 	return 0;
 }
 
-Reader::Reader(const char *path,uint32_t baud,const char *impl_tag):impl(0)
+Reader::Reader(const char *path,uint32_t baud,uint8_t parity,const char *impl_tag):impl(0)
 {
-	impl = get_impl(path,baud,impl_tag);
+	impl = get_impl(impl_tag,path,baud,parity);
 }
 
 Reader::~Reader()
@@ -92,7 +92,8 @@ Reader::~Reader()
 	delete impl;
 }
 
-long Reader::send_command(Protocol *protocol,uint8_t code, void *data, size_t len,void *answer, size_t answer_len)
+long Reader::send_command(Protocol *protocol,uint8_t addr, uint8_t code, 
+						  void *data, size_t len,void *answer, size_t answer_len)
 {
 	if(!impl) {
 		fprintf(stderr,"NO_IMPL\n");
@@ -101,7 +102,7 @@ long Reader::send_command(Protocol *protocol,uint8_t code, void *data, size_t le
 
 	//SubwayProtocol protocol(impl);
 	
-	if(long send_ret = protocol->send(code,data,len)) {
+	if(long send_ret = protocol->send(addr,code,data,len)) {
 		return send_ret;
 	}
 		

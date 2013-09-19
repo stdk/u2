@@ -47,13 +47,13 @@ static DWORD HandleLastError(const char *msg) {
 	return lastError;
 }
 
-static HANDLE ComOpen(const char *path, uint32_t baud,uint32_t flags)
-{
+static HANDLE ComOpen(const char *path, uint32_t baud, uint8_t parity, uint32_t flags) {
 	COMMTIMEOUTS		CommTimeouts;
 	DCB					dcb;
 		
 	wchar_t baud_s[50];
-	wsprintf(baud_s, L"baud=%d parity=N data=8 stop=1",baud);
+	wsprintf(baud_s, L"baud=%d parity=%s data=8 stop=1",baud,
+		parity == PARITY_EVEN ? "E" : (parity == PARITY_ODD ? "O" : "N" ) );
 
 	// get a handle to the port
 	HANDLE hCom = CreateFileA(path,					// communication port path
@@ -166,9 +166,10 @@ class BlockwiseImpl : public IOProvider
 
 	Timeout timeout;
 public:
-	BlockwiseImpl(const char* path,uint32_t baud):read_over(OP_READ),write_over(OP_WRITE),read_size(1) {
+	BlockwiseImpl(const char* path,uint32_t baud, uint8_t parity)
+	:read_over(OP_READ),write_over(OP_WRITE),read_size(1) {
 		uint32_t flags = FILE_FLAG_OVERLAPPED;
-		hCom = ComOpen(path, baud, flags);
+		hCom = ComOpen(path, baud, parity, flags);
 		if(INVALID_HANDLE_VALUE == hCom) throw -1;
 		
 		hIOCP = CreateIoCompletionPort(hCom,0,0,0);
@@ -319,7 +320,7 @@ public:
 	}
 };
 
-IOProvider* create_blockwise_impl(const char* path,uint32_t baud)
+IOProvider* create_blockwise_impl(const char* path,uint32_t baud,uint8_t parity)
 {
-	return new BlockwiseImpl(path,baud);
+	return new BlockwiseImpl(path,baud,parity);
 }

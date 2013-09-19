@@ -1,5 +1,5 @@
-#include "api_internal.h"
-#include "api_common.h"
+#include "api_subway_low.h"
+#include "api_subway_high.h"
 #include "protocol.h"
 #include "commands.h"
 
@@ -28,7 +28,7 @@ bool SerialNumber::operator==(const SerialNumber &other) {
 
 long Card::mfplus_personalize(Reader *reader)
 {
-	return reader->send_command<SubwayProtocol>(MFPLUS_PERSO);
+	return reader->send_command<SubwayProtocol>(0,MFPLUS_PERSO);
 }
 
 long Card::scan(Reader *reader) {
@@ -50,12 +50,12 @@ long Card::reset(Reader *reader) {
 
 long Card::request_std(Reader *reader,uint16_t *type) {
 	type = type ? type : &this->type;
-	return reader->send_command<SubwayProtocol>(REQUEST_STD,type);
+	return reader->send_command<SubwayProtocol>(0,REQUEST_STD,type);
 }
 
 long Card::anticollision(Reader *reader,SerialNumber *sn) {
 	sn = sn ? sn : &this->sn;
-	long ret = reader->send_command<SubwayProtocol>(ANTICOLLISION,sn);
+	long ret = reader->send_command<SubwayProtocol>(0,ANTICOLLISION,sn);
 	if((ret & ERR_MASK) == PACKET_DATA_LEN_ERROR) {
 		sn->fix();
 		return 0;
@@ -65,7 +65,7 @@ long Card::anticollision(Reader *reader,SerialNumber *sn) {
 }
 
 long Card::select(Reader *reader) {
-	return reader->send_command<SubwayProtocol>(SELECT,sn.sn5(),0);
+	return reader->send_command<SubwayProtocol>(0,SELECT,sn.sn5(),0);
 }
 
 /* -------------------------------------------------- */
@@ -77,7 +77,7 @@ Sector::Sector(uint8_t _num, uint8_t _key, uint8_t _mode):num(_num),key(_key),mo
 long Sector::authenticate(Reader *reader,Card *card) {
 	const int code = this->mode ? AUTH_DYN : AUTH;
 	auth_request request = { this->key, this->num, *card->sn.sn5() };
-	return reader->send_command<SubwayProtocol>(code,&request,(uint8_t*)0);
+	return reader->send_command<SubwayProtocol>(0,code,&request,(uint8_t*)0);
 }
 
 /* ------------------------- */
@@ -86,38 +86,38 @@ long Sector::read_block(Reader *reader, uint8_t block, uint8_t enc) {
 	if(block >= sizeof(this->data.blocks)/sizeof(block_t)) return -1;
 
 	read_block_request request = { block, this->num, enc };
-	return reader->send_command<SubwayProtocol>(BLOCK_READ,&request, &this->data.blocks[block]);
+	return reader->send_command<SubwayProtocol>(0,BLOCK_READ,&request, &this->data.blocks[block]);
 }
 
 long Sector::write_block(Reader *reader, uint8_t block, uint8_t enc) {
 	if(block >= sizeof(this->data.blocks)/sizeof(block_t)) return -1;
 
 	write_block_request request = { this->data.blocks[block], block, this->num, enc };
-	return reader->send_command<SubwayProtocol>(BLOCK_WRITE,&request, (uint8_t*)0);
+	return reader->send_command<SubwayProtocol>(0,BLOCK_WRITE,&request, (uint8_t*)0);
 }
 
 /* ------------------------- */
 
 long Sector::read(Reader* reader, uint8_t enc) {
 	read_sector_request request = { this->num, enc };
-	return reader->send_command<SubwayProtocol>(SECTOR_READ,&request,&this->data);
+	return reader->send_command<SubwayProtocol>(0,SECTOR_READ,&request,&this->data);
 }
 
 long Sector::write(Reader* reader, uint8_t enc) {
 	write_sector_request request = { this->data, this->num, enc };
-	return reader->send_command<SubwayProtocol>(SECTOR_WRITE,&request,(uint8_t*)0);
+	return reader->send_command<SubwayProtocol>(0,SECTOR_WRITE,&request,(uint8_t*)0);
 }
 
 /* ------------------------- */
 
 long Sector::set_trailer(Reader *reader) {
 	set_trailer_request request = { this->num, this->key };
-	return reader->send_command<SubwayProtocol>(SET_TRAILER,&request,(uint8_t*)0);
+	return reader->send_command<SubwayProtocol>(0,SET_TRAILER,&request,(uint8_t*)0);
 }
 
 long Sector::set_trailer_dynamic(Reader *reader,Card *card) {
 	set_trailer_dynamic_request request = { this->num, this->key, *card->sn.sn5() };
-	return reader->send_command<SubwayProtocol>(SET_TRAILER_DYN,&request,(uint8_t*)0);
+	return reader->send_command<SubwayProtocol>(0,SET_TRAILER_DYN,&request,(uint8_t*)0);
 }
 
 /* library interface for card */

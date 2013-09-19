@@ -1,6 +1,3 @@
-// CRC16.c
-/* Файл содержит описание функций подсчета контрольных сумм по алгоритму CRC16 */
-
 #include <string.h>
 #include "crc16.h"
 
@@ -76,7 +73,7 @@ void CRC16_Update( unsigned char val )
 	CRC16_Update4Bits( val & 0x0F );	// Low nibble
 }
 
-void CRC16_Calc( void *buffer,uint8_t len)
+void CRC16_Calc( const void *buffer,uint8_t len)
 {
   unsigned char* data = (uint8_t*)buffer;
   CRC16_Init();

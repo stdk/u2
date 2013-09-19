@@ -6,7 +6,7 @@ using namespace boost;
 
 extern unsigned char CRC16_High, CRC16_Low;
 
-void CRC16_Calc( void *buffer,uint8_t len);
+void CRC16_Calc( const void *buffer,uint8_t len);
 void CRC16_CalcBlock(void *Block,int low_endian = 0);
 void CRC16_CalcSector(void *Sector,int low_endian = 0);
 void CRC16_CalcData( unsigned char *data,unsigned char datalen);
