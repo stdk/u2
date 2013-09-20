@@ -53,7 +53,7 @@ static HANDLE ComOpen(const char *path, uint32_t baud, uint8_t parity, uint32_t 
 		
 	wchar_t baud_s[50];
 	wsprintf(baud_s, L"baud=%d parity=%s data=8 stop=1",baud,
-		parity == PARITY_EVEN ? "E" : (parity == PARITY_ODD ? "O" : "N" ) );
+		parity == PARITY::EVEN ? "E" : (parity == PARITY::ODD ? "O" : "N" ) );
 
 	// get a handle to the port
 	HANDLE hCom = CreateFileA(path,					// communication port path

@@ -20,13 +20,13 @@ IOProvider::~IOProvider()
 }
 
 ProtocolAnswer::ProtocolAnswer(void *_data, size_t _len, uint8_t _addr, uint8_t _code)
-:result(SUCCESS),data(_data),len(_len),addr(_addr),code(_code) 
+:result(SUCCESS),addr(_addr),code(_code),data(_data),len(_len) 
 {
 
 }
 
 ProtocolAnswer::ProtocolAnswer(long _result, uint8_t _addr, uint8_t _code)
-:result(_result),data(0),len(0),addr(_addr),code(_code)
+:result(_result),addr(_addr),code(_code),data(0),len(0)
 {
 
 }

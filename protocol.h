@@ -8,11 +8,12 @@
 
 using namespace boost;
 
-#ifndef WIN32
-#define PARITY_NONE             0
-#define PARITY_ODD              1
-#define PARITY_EVEN             2
-#endif
+namespace PARITY
+{
+	const uint8_t NONE  = 0;
+	const uint8_t ODD   = 1;
+	const uint8_t EVENT = 2;
+};
 
 #define ERR_MASK                0xFF0000FF
 

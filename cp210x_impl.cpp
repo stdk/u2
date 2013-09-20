@@ -84,14 +84,27 @@ class CP210XImpl : public IOProvider
 
 	signals2::signal<long (void *data, size_t len),combiner::maximum<long>> data_received;
 public:
-	CP210XImpl(const char *path,uint32_t baud):ctx(3),device(ctx) {
+	CP210XImpl(const char *path,uint32_t baud,uint8_t parity):ctx(3),device(ctx) {
 		if(!device) {
 			throw_exception(system::system_error(system::error_code(ENODEV,
 			                                     system::system_category())));
 		}
-			
+		
 		device.set_baud(baud);
-		device.set_ctl(cp210x::data8 | cp210x::parity_none | cp210x::stop1);		
+			
+		cp210x::parity_t parity_opt;
+		switch(parity) {
+			case PARITY::ODD:
+				parity_opt = cp210x::parity_odd;
+				break;
+			case PARITY::EVENT:
+				parity_opt = cp210x::parity_even;
+				break;
+			default:
+				parity_opt = cp210x::parity_none;
+				break;
+		}
+		device.set_ctl(cp210x::data8 | parity_opt | cp210x::stop1);
 	}	
 
 	virtual ~CP210XImpl() {
@@ -172,7 +185,7 @@ long CP210XImpl::cancel_timeout()
 	return 0;
 }
 
-IOProvider* create_cp210x_impl(const char* path,uint32_t baud)
+IOProvider* create_cp210x_impl(const char* path,uint32_t baud,uint8_t parity)
 {
-	return new CP210XImpl(path,baud);
+	return new CP210XImpl(path,baud,parity);
 }
