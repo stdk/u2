@@ -12,7 +12,7 @@ namespace PARITY
 {
 	const uint8_t NONE  = 0;
 	const uint8_t ODD   = 1;
-	const uint8_t EVENT = 2;
+	const uint8_t EVEN = 2;
 };
 
 #define ERR_MASK                0xFF0000FF
