@@ -71,7 +71,7 @@ static HANDLE ComOpen(const char *path, uint32_t baud, uint8_t parity, uint32_t 
 	}
 
 	// set the timeout values
-	CommTimeouts.ReadIntervalTimeout			= INFINITE;
+	CommTimeouts.ReadIntervalTimeout			= 1;
 	CommTimeouts.ReadTotalTimeoutMultiplier		= 0;
 	CommTimeouts.ReadTotalTimeoutConstant		= 0;
 	CommTimeouts.WriteTotalTimeoutMultiplier	= 0;
@@ -100,34 +100,49 @@ static HANDLE ComOpen(const char *path, uint32_t baud, uint8_t parity, uint32_t 
 
 class Timeout
 {
-	int active;
-	size_t final;
+	bool active;
+	size_t begin;
+	size_t timeout;
 	function<void ()> callback;
 public:
 	Timeout():active(false) {
 
 	}
 
-	void set(size_t timeout,function<void ()> timeout_callback) {
+	void set(size_t _timeout,function<void ()> timeout_callback) {
 		active = true;
 		callback = timeout_callback;
-		final = GetTickCount() + timeout;
+		begin = GetTickCount();
+		timeout = _timeout;		
 	}
 
-	void expired() {
+	bool check() {
 		if(active) {
-			callback();
-			active = false;
+			if(!time_left()) {
+				if(!callback.empty()) {
+					callback();
+					callback.clear();
+				}
+				active = false;
+				return true;
+			}
 		}
+		return false;
 	}
 
 	void cancel() {
 		active = false;
+		callback.clear();
 	}
 
-	size_t time_left() const {
-		long leftover = final - GetTickCount();
-		return leftover > 0 ? leftover : 0;
+	bool is_active() const {
+		return active;
+	}
+    
+	//returns time left on this timeout or 0 when there is no time left
+	size_t time_left() {
+		size_t diff = GetTickCount() - begin;
+		return diff < timeout ? timeout - diff : 0;
 	}
 
 	operator DWORD() {
@@ -219,22 +234,28 @@ public:
 
 			DWORD last_error = completed ? 0 : HandleLastError("GetQueuedCompletionStatus");
 			if(log_level) fprintf(stderr,"completed[%i] bytes_transferred[%i] over.operation[%i]\n",completed,bytes_transferred,over ? over->operation : 0);			
-			if(!completed) {
-				if(last_error == WAIT_TIMEOUT) {
-					timeout.expired();
-					CancelIo(hCom);
-					continue;
-				}
-			}			
+			
+			if((!completed && last_error == WAIT_TIMEOUT)) {
+				fprintf(stderr,"WAIT_TIMEOUT\n");				
+			}
 
-			if(!over) continue;
+			if(timeout.check()) {
+				int i = CancelIo(hCom);
+				fprintf(stderr,"CancelIo = %i\n",i);
+				continue;
+			}
+			
+
+			if(!completed || !over) {
+				continue;
+			}
 
 			if(over->operation == OP_READ) {
 				if(completed) {
 					long packet_found = data_received(read_buf,bytes_transferred);
 					if(!packet_found) {
 						Read(read_buf,1);
-					}				
+					}
 				}
 			}
 
@@ -259,16 +280,22 @@ public:
 		return TRUE;
 	}
 
-	BOOL Read(void *buf, size_t len)
+	bool Read(void *buf, size_t len)
 	{
-		if(log_level) std::cerr << "BlockwiseImpl::Read" << std::endl;
+		//ReadFile
+		//If the function succeeds, the return value is nonzero (TRUE).
+		//If the function fails, or is completing asynchronously, the return value is zero (FALSE). To get extended error information, call the GetLastError function.
+		//Note  The GetLastError code ERROR_IO_PENDING is not a failure; it designates the read operation is pending completion asynchronously. For more information, see Remarks.
+		//Comments:
+		//On Windows XP (at least) we have ReadFile returning TRUE and still initiating async iocp operation.
+
+		if(log_level) std::cerr << "BlockwiseImpl::Read " << timeout.time_left()<< std::endl;
 		BOOL read_ret = ReadFile(hCom, buf, len, 0, (OVERLAPPED*)&read_over);
 		if(!read_ret && GetLastError() != ERROR_IO_PENDING) {
 			HandleLastError("ReadFile");
-			return FALSE;
-		}
-
-		return TRUE;
+			return true;
+		} 
+		return false;;
 	}
 
 	static void disconnector(signals2::connection c)
