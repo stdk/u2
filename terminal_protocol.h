@@ -53,9 +53,12 @@ class TerminalProtocol : public Protocol
 
 	TerminalUnbytestaffer filter;
 
+	uint8_t type;
+	uint8_t addr;	
 	uint8_t write_buf[1024];
 
-	void timeout();
+	size_t timeout;
+	void timeout_callback();
 
 	// Receives block of data that should be parsed according to protocol tules.
 	// Return values: 
@@ -71,7 +74,15 @@ public:
 	TerminalProtocol(IOProvider *_provider);
 	virtual ~TerminalProtocol();
 
-	virtual long send(uint8_t addr, uint8_t code, void *data, size_t len);	
+	inline void set_timeout(size_t _timeout) {
+		timeout = _timeout;
+	}
+
+	inline void set_type(uint8_t _type) {
+		type = _type;
+	}
+
+	virtual long send(uint8_t _addr, uint8_t code, void *data, size_t len);	
 };
 
 

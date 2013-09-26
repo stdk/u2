@@ -4,8 +4,8 @@
 
 using namespace boost;
 
-static const size_t TIMEOUT = 1500;
-static const int log_level = 1;// getenv("DEBUG_TERMINAL_PROTOCOL") != 0;
+static const size_t DEFAULT_TIMEOUT = 150;
+static const int log_level = getenv("DEBUG_TERMINAL_PROTOCOL") != 0;
 
 static const size_t checksum_length = 2;
 
@@ -110,7 +110,7 @@ size_t TerminalPacketHeader::data_len(size_t bytes_available) const {
 // -1 when there is not enough space in given buffer for complete packet;
 // length of successfully constructed packet otherwise
 long terminal_create_custom_packet(void *packet, size_t max_packet_len,
-								   uint8_t addr, uint8_t code,
+								   uint8_t type, uint8_t addr, uint8_t code,
 								   void *data, uint8_t len) {
 	size_t packet_len = TerminalPacketHeader::suggest_size(len);
 
@@ -129,7 +129,7 @@ long terminal_create_custom_packet(void *packet, size_t max_packet_len,
 #endif
 
 	custom_packet->header.start = FMSTR;
-	custom_packet->header.type = FMAS;
+	custom_packet->header.type = type;
 	custom_packet->header.addr = addr;
 	custom_packet->header.code = code;
 
@@ -229,7 +229,8 @@ void TerminalUnbytestaffer::reset() {
 	escape = false;
 }
 
-TerminalProtocol::TerminalProtocol(IOProvider *_provider):provider(_provider) {
+TerminalProtocol::TerminalProtocol(IOProvider *_provider)
+:provider(_provider),type(FMAS),timeout(DEFAULT_TIMEOUT) {
 	disconnect = provider->listen(bind(&TerminalProtocol::feed,this,_1,_2));
 }
 
@@ -240,8 +241,8 @@ TerminalProtocol::~TerminalProtocol() {
 // This method will be used as callback in IOProvider->set_timeout.
 // Fires when maximum packet waiting time expired. If its called, that means not 
 // enough data came from the serial port to be recognized as a complete packet by read callbacks.
-void TerminalProtocol::timeout() {
-	if(log_level) std::cerr << "TerminalProtocol::timeout" << std::endl;
+void TerminalProtocol::timeout_callback() {
+	if(log_level) std::cerr << "TerminalProtocol::timeout_callback" << std::endl;
 	set_answer(ProtocolAnswer(NO_ANSWER));
 }
 
@@ -256,14 +257,16 @@ long TerminalProtocol::write_callback(size_t bytes_sent_to_transfer, size_t byte
 
 	if(log_level) std::cerr << "write_callback: " << bytes_transferred << "/" << bytes_sent_to_transfer << std::endl;
 
-	provider->set_timeout(TIMEOUT,bind(&TerminalProtocol::timeout,this));
+	provider->set_timeout(timeout,bind(&TerminalProtocol::timeout_callback,this));
 
 	return 0;
 }
 
-long TerminalProtocol::send(uint8_t addr, uint8_t code, void *data, size_t len) {
+long TerminalProtocol::send(uint8_t _addr, uint8_t code, void *data, size_t len) {
+	addr = _addr;
+
 	uint8_t packet[256] = {0};
-	long packet_len = terminal_create_custom_packet(packet,sizeof(packet),addr,code,data,len);
+	long packet_len = terminal_create_custom_packet(packet,sizeof(packet),type,addr,code,data,len);
 	if(packet_len == -1) {
 		std::cerr << "terminal_create_custom_packet failed for command code: " << code << std::endl;
 		return -0xCF;
@@ -298,10 +301,15 @@ long TerminalProtocol::feed(void *data, size_t len) {
 	if(!filter.completed()) return 0; 
 
 	TerminalPacketHeader *header = filter.get<TerminalPacketHeader*>();
-
 	size_t full_size = filter.size();
-	
-	debug_data("filtered",header,full_size);
+
+	//when we have an answer from a different device
+	if(header->addr != addr) {
+		fprintf(stderr,"header->addr != addr encountered\n");
+		debug_data("filtered",header,full_size);
+		filter.reset();
+		return 0;
+	}
 
 	if(full_size < header->suggest_size(0)) {
 		//when we have completed packet that consists of less bytes than minimal one
