@@ -54,7 +54,8 @@ class TerminalProtocol : public Protocol
 	TerminalUnbytestaffer filter;
 
 	uint8_t type;
-	uint8_t addr;	
+	uint8_t addr;
+	uint8_t code;
 	uint8_t write_buf[1024];
 
 	size_t timeout;
@@ -82,7 +83,7 @@ public:
 		type = _type;
 	}
 
-	virtual long send(uint8_t _addr, uint8_t code, void *data, size_t len);	
+	virtual long send(uint8_t _addr, uint8_t _code, void *data, size_t len);	
 };
 
 

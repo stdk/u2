@@ -262,8 +262,9 @@ long TerminalProtocol::write_callback(size_t bytes_sent_to_transfer, size_t byte
 	return 0;
 }
 
-long TerminalProtocol::send(uint8_t _addr, uint8_t code, void *data, size_t len) {
+long TerminalProtocol::send(uint8_t _addr, uint8_t _code, void *data, size_t len) {
 	addr = _addr;
+	code = _code;
 
 	uint8_t packet[256] = {0};
 	long packet_len = terminal_create_custom_packet(packet,sizeof(packet),type,addr,code,data,len);
@@ -303,10 +304,18 @@ long TerminalProtocol::feed(void *data, size_t len) {
 	TerminalPacketHeader *header = filter.get<TerminalPacketHeader*>();
 	size_t full_size = filter.size();
 
-	//when we have an answer from a different device
+	//when we have an answer from another device
 	if(header->addr != addr) {
-		fprintf(stderr,"header->addr != addr encountered\n");
-		debug_data("filtered",header,full_size);
+		fprintf(stderr,"header->addr[%hhX] != addr[%hhX]",header->addr,addr);
+		debug_data("",header,full_size);
+		filter.reset();
+		return 0;
+	}
+
+	//when we have an answer to another command
+	if(header->code != code) {
+		fprintf(stderr,"header->code[%hhX] != code[%hhX]",header->code,code);
+		debug_data("",header,full_size);
 		filter.reset();
 		return 0;
 	}
