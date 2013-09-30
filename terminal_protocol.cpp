@@ -257,7 +257,11 @@ long TerminalProtocol::write_callback(size_t bytes_sent_to_transfer, size_t byte
 
 	if(log_level) std::cerr << "write_callback: " << bytes_transferred << "/" << bytes_sent_to_transfer << std::endl;
 
-	provider->set_timeout(timeout,bind(&TerminalProtocol::timeout_callback,this));
+	if(timeout) {
+		provider->set_timeout(timeout,bind(&TerminalProtocol::timeout_callback,this));
+	} else {
+		set_answer(ProtocolAnswer(NO_ANSWER));
+	}
 
 	return 0;
 }
