@@ -38,7 +38,15 @@ Protocol::Protocol():answer_future(answer_promise.get_future())
 
 void Protocol::set_answer(ProtocolAnswer answer)
 {
-	answer_promise.set_value(answer);
+	try {
+		answer_promise.set_value(answer);
+	} catch(boost::promise_already_satisfied &e) {
+		std::cerr << "PROMISE_ALREADY_SATISFIED: " << e.what() << std::endl;
+	} catch(boost::broken_promise &e) {
+		std::cerr << "BROKEN_PROMISE: " << e.what() << std::endl;
+	} catch(std::bad_alloc &e) {
+		std::cerr << "BAD_ALLOC: " << e.what() << std::endl;
+	}
 }
 
 ProtocolAnswer Protocol::get_answer()
