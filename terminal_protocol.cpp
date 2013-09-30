@@ -259,11 +259,11 @@ long TerminalProtocol::write_callback(size_t bytes_sent_to_transfer, size_t byte
 
 	if(timeout) {
 		provider->set_timeout(timeout,bind(&TerminalProtocol::timeout_callback,this));
+		return 0;
 	} else {
 		set_answer(ProtocolAnswer(NO_ANSWER));
+		return 1;
 	}
-
-	return 0;
 }
 
 long TerminalProtocol::send(uint8_t _addr, uint8_t _code, void *data, size_t len) {
