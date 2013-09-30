@@ -97,7 +97,7 @@ public:
 			case PARITY::ODD:
 				parity_opt = cp210x::parity_odd;
 				break;
-			case PARITY::EVENT:
+			case PARITY::EVEN:
 				parity_opt = cp210x::parity_even;
 				break;
 			default:
