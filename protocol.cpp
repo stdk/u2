@@ -68,6 +68,7 @@ ISaveLoadable::~ISaveLoadable()
 IOProvider* create_blockwise_impl(const char *path,uint32_t baud,uint8_t parity);
 #else
 IOProvider* create_cp210x_impl(const char *path,uint32_t baud,uint8_t parity);
+IOProvider* create_unix_impl(const char *path, uint32_t baud, uint8_t parity);
 #endif
 IOProvider* create_asio_impl(const char *path,uint32_t baud,uint8_t parity);
 IOProvider* create_asio_mt_impl(const char *path,uint32_t baud,uint8_t parity);
@@ -81,6 +82,7 @@ static IOProvider * get_impl(const char *impl_tag, const char *path, uint32_t ba
 	if(s == "blockwise") return create_blockwise_impl(path,baud,parity);
 #else
 	if(s == "cp210x") return create_cp210x_impl(path,baud,parity);
+	if(s == "unix") return create_unix_impl(path,baud,parity);
 #endif
     if(s == "asio-mt") return create_asio_mt_impl(path,baud,parity);
 	if(s == "asio") return create_asio_impl(path,baud,parity);
