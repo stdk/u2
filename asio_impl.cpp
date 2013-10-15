@@ -83,8 +83,8 @@ class AsioImpl : public IOProvider
 		namespace ph = boost::asio::placeholders;
 		 
 		asio::async_read(this->serial,asio::buffer(read_buf,read_size),
-			bind(&AsioImpl::check_callback,this,ph::bytes_transferred,ph::error),
-			bind(&AsioImpl::read_callback,this,ph::bytes_transferred,ph::error));
+			boost::bind(&AsioImpl::check_callback,this,ph::bytes_transferred,ph::error),
+			boost::bind(&AsioImpl::read_callback,this,ph::bytes_transferred,ph::error));
 	}
 public:
 	AsioImpl(const char* path,uint32_t baud,uint8_t parity)
@@ -120,13 +120,13 @@ static void disconnector(signals2::connection c)
 function<void ()> AsioImpl::listen(IOProvider::listen_callback callback)
 {
 	signals2::connection c = data_received.connect(callback);
-	return bind(disconnector,c);
+	return boost::bind(disconnector,c);
 }
 
 void AsioImpl::send(void *data, size_t len, IOProvider::send_callback callback)
 {
 	asio::async_write(this->serial,asio::buffer(data,len),
-		bind(&AsioImpl::write_callback,this,
+		boost::bind(&AsioImpl::write_callback,this,
 		     callback,
 		     asio::placeholders::bytes_transferred,
 			 asio::placeholders::error));
@@ -137,7 +137,7 @@ void AsioImpl::send(void *data, size_t len, IOProvider::send_callback callback)
 long AsioImpl::set_timeout(size_t timeout, IOProvider::timeout_callback callback)
 {
 	this->timeout.expires_from_now(posix_time::milliseconds(timeout));
-	this->timeout.async_wait(bind(&AsioImpl::wait_callback,this,callback,asio::placeholders::error));
+	this->timeout.async_wait(boost::bind(&AsioImpl::wait_callback,this,callback,asio::placeholders::error));
 
 	return 0;
 }

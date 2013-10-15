@@ -122,3 +122,4 @@ struct terminal_time
 EXPORT long terminal_set_time(Reader *reader, uint8_t addr, terminal_time *t) {
 	return reader->send_command<CustomTerminalProtocol<0> >(addr,'T',t,(uint8_t*)0);
 }
+

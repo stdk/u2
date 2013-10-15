@@ -115,7 +115,7 @@ public:
 		if(log_level) std::cerr << "FileImpl::listen" << std::endl;
 
 		signals2::connection c = data_received.connect(callback);
-		return bind(disconnector,c);
+		return boost::bind(disconnector,c);
 	}
 
 	virtual long set_timeout(size_t time, function<void ()> callback)

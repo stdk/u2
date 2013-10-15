@@ -223,7 +223,7 @@ void SubwayUnbytestaffer::reset() {
 
 
 SubwayProtocol::SubwayProtocol(IOProvider *_provider):provider(_provider) {
-	disconnect = provider->listen(bind(&SubwayProtocol::feed,this,_1,_2));
+	disconnect = provider->listen(boost::bind(&SubwayProtocol::feed,this,_1,_2));
 }
 
 SubwayProtocol::~SubwayProtocol() {
@@ -249,7 +249,7 @@ long SubwayProtocol::write_callback(size_t bytes_sent_to_transfer, size_t bytes_
 
 	if(log_level) std::cerr << "write_callback: " << bytes_transferred << "/" << bytes_sent_to_transfer << std::endl;
 
-	provider->set_timeout(TIMEOUT,bind(&SubwayProtocol::timeout,this));
+	provider->set_timeout(TIMEOUT,boost::bind(&SubwayProtocol::timeout,this));
 
 	return 0;
 }
@@ -267,7 +267,7 @@ long SubwayProtocol::send(uint8_t addr, uint8_t code, void *data, size_t len) {
 	if(log_level) debug_data("send",write_buf,write_buf_len);
 
 	provider->send(write_buf,write_buf_len,
-		bind(&SubwayProtocol::write_callback,this,write_buf_len,_1,_2));
+		boost::bind(&SubwayProtocol::write_callback,this,write_buf_len,_1,_2));
 
 	return 0;
 }

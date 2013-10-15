@@ -105,8 +105,8 @@ class AsioMTImpl : public IOProvider
 		namespace ph = boost::asio::placeholders;
 		 
 		asio::async_read(this->serial,asio::buffer(read_buf,read_size),
-			bind(&AsioMTImpl::check_callback,this,ph::bytes_transferred,ph::error),
-			bind(&AsioMTImpl::read_callback,this,ph::bytes_transferred,ph::error));
+			boost::bind(&AsioMTImpl::check_callback,this,ph::bytes_transferred,ph::error),
+			boost::bind(&AsioMTImpl::read_callback,this,ph::bytes_transferred,ph::error));
 	}
 
 public:
@@ -119,12 +119,12 @@ public:
 		const asio::serial_port_base::stop_bits stop_bits_opt(asio::serial_port_base::stop_bits::one);
 
 		serial.set_option(asio::serial_port_base::baud_rate(baud));
-		serial.set_option(asio::serial_port_base::character_size(8)); 
+		serial.set_option(asio::serial_port_base::character_size(8));
 		serial.set_option(parity_opt);
 		serial.set_option(stop_bits_opt);
 		serial.set_option(asio::serial_port_base::flow_control(asio::serial_port_base::flow_control::none)); 
 
-		io_thread = thread(bind(&AsioMTImpl::io_service_thread,this));
+		io_thread = thread(boost::bind(&AsioMTImpl::io_service_thread,this));
 	}
 
 	void io_service_thread() {
@@ -156,13 +156,13 @@ function<void ()> AsioMTImpl::listen(IOProvider::listen_callback callback)
 	if(log_level) std::cerr << "listen" << std::endl;
 
 	signals2::connection c = data_received.connect(callback);
-	return bind(disconnector,c);
+	return boost::bind(disconnector,c);
 }
 
 void AsioMTImpl::send(void *data, size_t len,IOProvider::send_callback callback) 
 {
 	asio::async_write(this->serial,asio::buffer(data,len),
-		bind(&AsioMTImpl::write_callback,this,
+		boost::bind(&AsioMTImpl::write_callback,this,
 		     callback,
 		     asio::placeholders::bytes_transferred,
 			 asio::placeholders::error));
@@ -173,7 +173,7 @@ long AsioMTImpl::set_timeout(size_t timeout, IOProvider::timeout_callback callba
 	if(log_level) std::cerr << "set_timeout" << std::endl;
 
 	this->timeout.expires_from_now(posix_time::milliseconds(timeout));
-	this->timeout.async_wait(bind(&AsioMTImpl::wait_callback,this,callback,asio::placeholders::error));
+	this->timeout.async_wait(boost::bind(&AsioMTImpl::wait_callback,this,callback,asio::placeholders::error));
 
 	return 0;
 }

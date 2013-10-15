@@ -193,7 +193,7 @@ public:
 			throw -2;
 		};
 	
-		io_thread = thread(bind(&BlockwiseImpl::iocp_thread,this));		
+		io_thread = thread(boost::bind(&BlockwiseImpl::iocp_thread,this));		
 	}
 
 	void stop_iocp_thread()
@@ -310,7 +310,7 @@ public:
 		if(log_level) std::cerr << "BlockwiseImpl::listen" << std::endl;
 
 		signals2::connection c = data_received.connect(callback);
-		return bind(disconnector,c);
+		return boost::bind(disconnector,c);
 	}
 
 	static long write_callback(signals2::connection c,IOProvider::send_callback callback,
@@ -324,7 +324,7 @@ public:
 	virtual void send(void *data, size_t len, IOProvider::send_callback callback) 
 	{
 		if(log_level) std::cerr << "BlockwiseImpl::send" << std::endl;
-		data_sent.connect_extended(bind(write_callback,_1,callback,_2,_3));
+		data_sent.connect_extended(boost::bind(write_callback,_1,callback,_2,_3));
 		if(!Write(data,len)) {
 			data_sent(0,system::error_code(::GetLastError(),system::system_category()));
 		}

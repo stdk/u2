@@ -32,7 +32,7 @@ class Connector
 	void async_connect(tcp::socket &socket, tcp::resolver::iterator i) {
 		if(log_level) std::cerr << "async_connect " << std::endl;
 		try {
-			socket.async_connect(*i,bind(&Connector::connect_callback,this,
+			socket.async_connect(*i,boost::bind(&Connector::connect_callback,this,
 				asio::placeholders::error,ref(socket),i));
 		} catch(system::system_error &e) {
 			std::cerr << "async_connect: " << e.what() << std::endl;
@@ -76,13 +76,13 @@ public:
 		boost::unique_future<system::error_code> connect_future = connect_promise.get_future();
 
 		tcp::resolver::query query(host, service);
-		resolver.async_resolve(query,bind(&Connector::resolve_callback,this,
+		resolver.async_resolve(query,boost::bind(&Connector::resolve_callback,this,
 			asio::placeholders::error,
 			ref(socket),
 			asio::placeholders::iterator));
 
 		timeout.expires_from_now(posix_time::milliseconds(connect_timeout));
-		timeout.async_wait(bind(&Connector::timeout_callback,this,
+		timeout.async_wait(boost::bind(&Connector::timeout_callback,this,
 			asio::placeholders::error,ref(socket)));
 
 		return connect_future.get();
@@ -159,8 +159,8 @@ class TcpImpl : public IOProvider
 		namespace ph = boost::asio::placeholders;
 		 
 		asio::async_read(this->socket,asio::buffer(read_buf),
-			bind(&TcpImpl::check_callback,this,ph::bytes_transferred,ph::error),
-			bind(&TcpImpl::read_callback,this,ph::bytes_transferred,ph::error));
+			boost::bind(&TcpImpl::check_callback,this,ph::bytes_transferred,ph::error),
+			boost::bind(&TcpImpl::read_callback,this,ph::bytes_transferred,ph::error));
 	}
 
 public:
@@ -174,7 +174,7 @@ public:
 			throw_exception(system::system_error(boost::asio::error::invalid_argument));
 		}
 
-		io_thread = thread(bind(&TcpImpl::io_service_thread,this));
+		io_thread = thread(boost::bind(&TcpImpl::io_service_thread,this));
 
 		Connector connector(io_svc);
 		system::error_code error = connector.connect(socket,tokens[0],tokens[1]);
@@ -224,13 +224,13 @@ function<void ()> TcpImpl::listen(IOProvider::listen_callback callback)
 	if(log_level) std::cerr << "listen" << std::endl;
 
 	signals2::connection c = data_received.connect(callback);
-	return bind(disconnector,c);
+	return boost::bind(disconnector,c);
 }
 
 void TcpImpl::send(void *data, size_t len,IOProvider::send_callback callback) 
 {
 	asio::async_write(this->socket,asio::buffer(data,len),
-		bind(&TcpImpl::write_callback,this,
+		boost::bind(&TcpImpl::write_callback,this,
 		     callback,
 		     asio::placeholders::bytes_transferred,
 			 asio::placeholders::error));
@@ -241,7 +241,7 @@ long TcpImpl::set_timeout(size_t timeout, IOProvider::timeout_callback callback)
 	if(log_level) std::cerr << "set_timeout" << std::endl;
 
 	this->timeout.expires_from_now(posix_time::milliseconds(timeout));
-	this->timeout.async_wait(bind(&TcpImpl::wait_callback,this,callback,asio::placeholders::error));
+	this->timeout.async_wait(boost::bind(&TcpImpl::wait_callback,this,callback,asio::placeholders::error));
 
 	return 0;
 }
