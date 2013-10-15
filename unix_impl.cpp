@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "custom_combiners.h"
 
 #include <iostream>
 #include <iterator>
@@ -33,7 +34,7 @@ class UnixImpl : public IOProvider
 
 	unsigned char read_buf[512];
 	
-	signals2::signal<long (void *data, size_t len)> data_received;
+	signals2::signal<long (void *data, size_t len), combiner::maximum<long>> data_received;
 
 	void read_callback(size_t bytes_transferred,const system::error_code& error)
 	{
@@ -43,9 +44,14 @@ class UnixImpl : public IOProvider
 			return;
 		}
 
-		if(log_level) debug_data("read_callback",read_buf,bytes_transferred);
+		long packet_found = data_received(read_buf,bytes_transferred);
+		if(!packet_found) {
+			initiate_read();
+		}
+
+		/*if(log_level) debug_data("read_callback",read_buf,bytes_transferred);
 	    data_received(read_buf,bytes_transferred);
-		initiate_read();
+		initiate_read();*/
 	}
 
 	// Any byte is precious to us.
@@ -58,7 +64,10 @@ class UnixImpl : public IOProvider
 
 	void write_callback(IOProvider::send_callback callback,size_t bytes_transferred,const system::error_code& error)
 	{
-		callback(bytes_transferred,error);
+		if(callback(bytes_transferred,error) == 0) {
+			initiate_read();
+		}
+		//callback(bytes_transferred,error);
 	}
 
 	void wait_callback(function<void ()> callback, const system::error_code& error)
@@ -66,6 +75,8 @@ class UnixImpl : public IOProvider
 		if (error) return;   // Data has been read and this timeout was canceled
 		
 		callback();
+
+		socket.cancel();
 	}
 
 	// Begin new iteration of packet read by executing async_read 
@@ -90,7 +101,7 @@ public:
 		
 		socket.connect(path);
 		
-		initiate_read();
+		//initiate_read();
 
 		io_thread = thread(bind(&UnixImpl::io_service_thread,this));
 	}
