@@ -102,7 +102,7 @@ EXPORT long terminal_ack_barcode(Reader *reader, uint8_t addr) {
 struct terminal_strings
 {
 	char tariff_names[8][20];
-	char check_lines[4][10];
+	char check_lines[4][30];
 };
 
 EXPORT long terminal_set_strings(Reader *reader, uint8_t addr, terminal_strings *strings) {
@@ -123,3 +123,26 @@ EXPORT long terminal_set_time(Reader *reader, uint8_t addr, terminal_time *t) {
 	return reader->send_command<CustomTerminalProtocol<0> >(addr,'T',t,(uint8_t*)0);
 }
 
+EXPORT long terminal_show_message(Reader *reader, uint8_t addr, void *message, uint8_t len, uint8_t status) {
+	struct lcd_message {
+		uint8_t clear;
+		uint8_t num;
+		uint8_t pos;
+		uint8_t status;
+		uint8_t data[0];
+	};
+	size_t full_len = sizeof(lcd_message) + len;
+		
+	lcd_message *msg = (lcd_message*)(new uint8_t[full_len]);
+	msg->clear = 1;
+	msg->num = len;
+	msg->pos = 20;
+	msg->status = status;
+	memcpy(msg->data,message,len);
+
+	long ret = reader->send_command<CustomTerminalProtocol<0> >(addr,'L',msg,full_len,0,0);
+
+	delete[] (uint8_t*)msg;
+
+	return ret;
+}
