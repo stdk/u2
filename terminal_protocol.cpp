@@ -270,7 +270,7 @@ long TerminalProtocol::send(uint8_t _addr, uint8_t _code, void *data, size_t len
 	addr = _addr;
 	code = _code;
 
-	uint8_t packet[256] = {0};
+	uint8_t packet[512] = {0};
 	long packet_len = terminal_create_custom_packet(packet,sizeof(packet),type,addr,code,data,len);
 	if(packet_len == -1) {
 		std::cerr << "terminal_create_custom_packet failed for command code: " << code << std::endl;
