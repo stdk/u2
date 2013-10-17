@@ -102,7 +102,7 @@ EXPORT long terminal_ack_barcode(Reader *reader, uint8_t addr) {
 struct terminal_strings
 {
 	char tariff_names[8][20];
-	char check_lines[4][30];
+	char check_lines[8][30];
 };
 
 EXPORT long terminal_set_strings(Reader *reader, uint8_t addr, terminal_strings *strings) {
