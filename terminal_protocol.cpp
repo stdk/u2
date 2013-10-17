@@ -111,7 +111,7 @@ size_t TerminalPacketHeader::data_len(size_t bytes_available) const {
 // length of successfully constructed packet otherwise
 long terminal_create_custom_packet(void *packet, size_t max_packet_len,
 								   uint8_t type, uint8_t addr, uint8_t code,
-								   void *data, uint8_t len) {
+								   void *data, size_t len) {
 	size_t packet_len = TerminalPacketHeader::suggest_size(len);
 
 	if(packet_len > max_packet_len) return -1;
