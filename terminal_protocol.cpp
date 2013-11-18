@@ -123,11 +123,11 @@ long terminal_create_custom_packet(void *packet, size_t max_packet_len,
 	struct CustomPacket {
 		TerminalPacketHeader header;
 		uint8_t contents[0];
-	} *custom_packet = (CustomPacket*)packet;
+	} __attribute__((packed)) *custom_packet = (CustomPacket*)packet;
 #ifdef WIN32
 #pragma warning( pop )
 #endif
-
+	
 	custom_packet->header.start = FMSTR;
 	custom_packet->header.type = type;
 	custom_packet->header.addr = addr;
@@ -139,7 +139,7 @@ long terminal_create_custom_packet(void *packet, size_t max_packet_len,
 	custom_packet->contents[packet_len - sizeof(TerminalPacketHeader) - 3] = checksum >> 8;   // checksum high
 	custom_packet->contents[packet_len - sizeof(TerminalPacketHeader) - 2] = checksum & 0xFF; // checksum low
 	custom_packet->contents[packet_len - sizeof(TerminalPacketHeader) - 1] = FEND;
-
+	
 	return packet_len;
 }
 
@@ -338,3 +338,4 @@ long TerminalProtocol::feed(void *data, size_t len) {
 
 	return 1;
 }
+
