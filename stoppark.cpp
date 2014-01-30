@@ -45,8 +45,8 @@ EXPORT long terminal_reset_entries(Reader *reader, uint8_t addr) {
 
 struct terminal_entries_set
 {
-	uint8_t reason;
 	uint8_t command;
+	uint8_t reason;
 };
 
 EXPORT long terminal_set_state(Reader *reader, uint8_t addr, terminal_entries_set *entries) {
